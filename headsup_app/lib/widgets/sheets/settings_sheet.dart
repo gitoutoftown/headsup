@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/theme.dart';
 import '../../utils/constants.dart';
+import '../../services/notification_service.dart';
 
 /// Haptic feedback interval options
 enum HapticInterval {
@@ -220,11 +221,19 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 title: const Text('Reminder Notification'),
                 subtitle: const Text('Reminds you to start tracking'),
                 value: _reminderEnabled,
-                onChanged: (value) {
+                onChanged: (value) async {
                   setState(() {
                     _reminderEnabled = value;
                   });
                   _saveSettings();
+                  
+                  // Schedule or cancel notifications
+                  if (value) {
+                    await NotificationService().requestPermissions();
+                    await NotificationService().scheduleDailyReminder(time: _reminderTime);
+                  } else {
+                    await NotificationService().cancelAllReminders();
+                  }
                 },
                 contentPadding: EdgeInsets.zero,
               ),
@@ -309,6 +318,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
         _reminderTime = time;
       });
       _saveSettings();
+      
+      // Reschedule notification with new time
+      if (_reminderEnabled) {
+        await NotificationService().scheduleDailyReminder(time: time);
+      }
     }
   }
 }

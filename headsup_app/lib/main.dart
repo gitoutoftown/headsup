@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/supabase_config.dart';
 import 'config/theme.dart';
 import 'screens/home_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,10 @@ void main() async {
   
   // Initialize Supabase
   await SupabaseConfig.initialize();
+  
+  // Initialize notifications and restore scheduled reminders
+  await NotificationService().initialize();
+  await NotificationService().restoreRemindersFromPrefs();
   
   runApp(const ProviderScope(child: HeadsUpApp()));
 }
