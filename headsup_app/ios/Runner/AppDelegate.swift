@@ -8,6 +8,10 @@ import UIKit
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+    
+    // Register custom MotionPlugin for CMDeviceMotion access
+    MotionPlugin.register(with: self.registrar(forPlugin: "MotionPlugin")!)
+    
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }

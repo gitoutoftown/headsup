@@ -1,0 +1,700 @@
+# HeadsUp: Gyroscope Tracking Accuracy Implementation Guide
+
+## Executive Summary
+
+This document provides implementation guidance for achieving 85-90% posture tracking accuracy using device motion sensors. The key insight: **Use CMDeviceMotion (Apple's sensor fusion) INSTEAD OF raw gyroscope data** for significantly better accuracy with minimal extra effort.
+
+---
+
+## Critical Decision: CMDeviceMotion vs Raw Gyroscope
+
+### RECOMMENDATION: Use CMDeviceMotion (REPLACE raw gyroscope)
+
+**What is CMDeviceMotion?**
+- Apple's CoreMotion framework combines multiple sensors automatically:
+  - Gyroscope (rotation rate)
+  - Accelerometer (gravity direction)
+  - Magnetometer (compass for absolute reference)
+- Pre-processed, fused sensor data
+- More accurate than raw gyroscope alone
+- Handles sensor drift and calibration internally
+
+**Why CMDeviceMotion is better:**
+- ✅ More accurate orientation (accounts for gravity)
+- ✅ Less drift over time (auto-calibrates)
+- ✅ Easier to use (fewer calculations needed)
+- ✅ Better battery efficiency (optimized by Apple)
+- ✅ Handles edge cases (sensor errors, calibration)
+
+**Why NOT to use raw gyroscope:**
+- ❌ Gyroscope only measures rotation rate (not absolute orientation)
+- ❌ Accumulates drift over long sessions
+- ❌ Doesn't account for gravity direction
+- ❌ Requires manual sensor fusion with accelerometer
+- ❌ More complex filtering needed
+
+### Implementation Approach
+
+**For Flutter + iOS:**
+
+1. **Don't use:** `sensors_plus` package for raw gyroscope
+2. **Do use:** Platform channel to access native iOS CoreMotion
+3. **Access:** `CMDeviceMotion` object via `CMMotionManager`
+4. **Get:** `attitude` property for device orientation
+
+**Flutter will need:**
+- Platform channel (MethodChannel) to call native iOS code
+- Native iOS Swift/Objective-C code to access CMMotionManager
+- Return attitude data (pitch, roll, yaw) to Flutter side
+
+---
+
+## Implementation Roadmap
+
+### Phase 1: Core Tracking (Weeks 3-4) - MUST HAVE
+
+#### 1.1 Use CMDeviceMotion for Sensor Data
+
+**Objective:** Replace raw gyroscope with Apple's fused sensor data
+
+**iOS Native Implementation:**
+
+**What to implement:**
+- Create MethodChannel in Flutter
+- Implement native iOS code using CMMotionManager
+- Start device motion updates when session begins
+- Stream attitude data (pitch, roll, yaw) back to Flutter
+- Stop updates when session ends
+
+**Data to retrieve from CMDeviceMotion:**
+```
+pitch: Rotation around X-axis (forward/backward tilt)
+roll: Rotation around Y-axis (left/right tilt)  
+yaw: Rotation around Z-axis (compass direction - optional)
+```
+
+**Update frequency:**
+- Set update interval to 0.2 seconds (5 Hz / every 5 seconds)
+- Balance between accuracy and battery life
+- Don't sample faster than needed
+
+**Error handling:**
+- Check if device motion is available
+- Handle permission issues
+- Detect sensor failures gracefully
+
+#### 1.2 Calculate 3D Tilt Angle
+
+**Objective:** Compute accurate phone tilt from vertical using pitch and roll
+
+**Algorithm:**
+
+**Convert radians to degrees (iOS gives radians):**
+```
+pitch_degrees = pitch_radians × (180 / π)
+roll_degrees = roll_radians × (180 / π)
+```
+
+**Calculate combined tilt angle:**
+```
+tilt_angle = sqrt(pitch_degrees² + roll_degrees²)
+```
+
+**Interpretation:**
+- 0° = Phone perfectly vertical (standing upright)
+- 45° = Moderate tilt (typical good reading posture)
+- 90° = Phone horizontal (lying flat or severe hunch)
+
+**Why this works:**
+- Captures tilt in any direction (not just forward/back)
+- Accounts for users holding phone at angles
+- More accurate than pitch-only measurement
+- Mathematical representation of "distance from vertical"
+
+#### 1.3 Apply Moving Average Filter
+
+**Objective:** Smooth out sensor noise and hand tremors
+
+**Implementation:**
+
+**Keep circular buffer of recent readings:**
+```
+buffer_size = 5 readings
+buffer = [angle1, angle2, angle3, angle4, angle5]
+```
+
+**Calculate smoothed angle:**
+```
+smoothed_angle = (angle1 + angle2 + angle3 + angle4 + angle5) / 5
+```
+
+**Update buffer:**
+- Add new reading to end
+- Remove oldest reading from beginning
+- Maintain fixed size (5 readings)
+
+**Benefits:**
+- Reduces jitter from hand movements
+- Provides stable reading for UI
+- Minimal lag (only 5-reading delay at 5Hz = 1 second)
+
+**When to reset buffer:**
+- Session starts (clear old data)
+- After auto-pause/resume
+- After calibration
+
+#### 1.4 Context Detection - Basic
+
+**Objective:** Detect when NOT to track and auto-pause
+
+**Scenarios to detect:**
+
+**A. Phone Face-Down:**
+```
+Detection: pitch ≈ 180° or roll ≈ 180°
+Action: Auto-pause after 2 minutes face-down
+Reason: Phone on table, not in use
+```
+
+**B. Phone Face-Up Flat:**
+```
+Detection: pitch ≈ 0° AND roll ≈ 0° for >5 minutes
+Action: Prompt user "Still tracking?"
+Reason: Phone on desk, passive use
+```
+
+**C. Landscape Orientation:**
+```
+Detection: roll ≈ 90° or roll ≈ -90°
+Action: Use different thresholds (add 20° to all thresholds)
+Reason: Watching videos has different ergonomics
+```
+
+**D. Device Charging + Stationary:**
+```
+Detection: Battery state = charging AND minimal movement for >5 min
+Action: Auto-pause
+Reason: Phone plugged in on desk/nightstand
+```
+
+**Implementation strategy:**
+- Check these conditions every 30 seconds
+- Don't check every sensor reading (too aggressive)
+- Show user-friendly pause reason in UI
+- Allow manual resume
+
+#### 1.5 Outlier Rejection
+
+**Objective:** Filter out impossible or erroneous readings
+
+**Rules to implement:**
+
+**Rule 1: Instant change threshold**
+```
+If |current_angle - previous_angle| > 30° AND time_diff < 1 second:
+    → Reject reading, keep previous value
+    → Likely: dropped phone, gesture, sensor glitch
+```
+
+**Rule 2: Physically impossible angles**
+```
+If tilt_angle > 95°:
+    → Reject reading
+    → Likely: phone upside down or sensor error
+```
+
+**Rule 3: Rapid oscillation**
+```
+If angle changes direction >5 times in 10 seconds:
+    → Reject all readings in this period
+    → Likely: shaking phone, walking, unstable grip
+```
+
+**Logging:**
+- Track rejection count
+- If >20% of readings rejected in session → warn user of sensor issues
+
+---
+
+### Phase 2: Personalization (Weeks 5-6) - SHOULD HAVE
+
+#### 2.1 Personal Calibration During Onboarding
+
+**Objective:** Set user-specific thresholds instead of hardcoded values
+
+**Calibration flow:**
+
+**Step 1: Good Posture Baseline**
+```
+Instruction: "Sit up straight and hold your phone at eye level"
+Duration: 10 seconds of continuous measurement
+Capture: Record all angles during this period
+Calculate: average_good_angle = mean of all readings
+Store: User's personal "good posture" reference
+```
+
+**Step 2: Typical Reading Posture**
+```
+Instruction: "Now hold your phone how you normally read"
+Duration: 10 seconds
+Capture: Record all angles
+Calculate: average_reading_angle = mean of all readings
+Store: User's typical usage angle
+```
+
+**Step 3: Calculate Personal Thresholds**
+```
+good_threshold = average_good_angle + 15°
+poor_threshold = average_good_angle + 40°
+
+Example:
+- User's good angle: 35°
+- Good posture range: 0° to 50° (35 + 15)
+- Poor posture: >75° (35 + 40)
+```
+
+**Why this works:**
+- Tall people naturally hold phones higher (smaller angles)
+- Short people hold phones lower (larger angles)
+- Arm length affects natural phone position
+- Eliminates false positives from body type differences
+
+**Storage:**
+- Save to local database (Settings table)
+- Allow user to re-calibrate in settings
+- Use defaults if calibration skipped (45° good, 75° poor)
+
+#### 2.2 Temporal Smoothing (Ignore Brief Angles)
+
+**Objective:** Only count sustained poor posture, not momentary positions
+
+**Algorithm:**
+
+**Track angle duration:**
+```
+If angle in poor range:
+    poor_posture_timer += elapsed_time
+    
+    If poor_posture_timer >= 5 seconds:
+        → Count as "poor posture"
+        → Increment poor_posture_total
+    Else:
+        → Ignore (temporary position)
+        
+If angle returns to good range:
+    poor_posture_timer = 0  // Reset
+```
+
+**Benefits:**
+- Brief glances down don't hurt score
+- User can check notifications without penalty
+- Only sustained hunching counts
+- More accurate representation of habit
+
+**Adjustable threshold:**
+- 5 seconds for MVP
+- Let advanced users adjust (3-10 seconds range)
+- Stricter = 3 seconds, More lenient = 10 seconds
+
+#### 2.3 Gravity Vector Fusion (Already Handled by CMDeviceMotion)
+
+**Note:** If using CMDeviceMotion, this is automatic!
+
+**What CMDeviceMotion does internally:**
+- Fuses gyroscope rotation rate with accelerometer gravity vector
+- Provides absolute orientation relative to Earth
+- Handles sensor drift correction
+- More accurate than manual implementation
+
+**If NOT using CMDeviceMotion (not recommended):**
+- Would need to manually combine gyroscope + accelerometer
+- Complex quaternion math required
+- Prone to errors and drift
+- Don't do this - use CMDeviceMotion instead
+
+---
+
+### Phase 3: Advanced Features (Weeks 7-8) - NICE TO HAVE
+
+#### 3.1 Adaptive Thresholds (Percentile-Based)
+
+**Objective:** Automatically adjust to user's natural patterns
+
+**Algorithm:**
+
+**After 7 days of data collection:**
+```
+Collect all angle readings from user's history
+Sort angles from smallest to largest
+
+good_threshold = 25th percentile angle
+fair_threshold = 50th percentile angle (median)
+poor_threshold = 75th percentile angle
+
+Example with user's data:
+- 25th percentile: 40° → Good posture
+- 50th percentile: 55° → Fair posture  
+- 75th percentile: 70° → Poor posture
+```
+
+**Benefits:**
+- Adapts to individual usage patterns
+- Accounts for different phone usage contexts
+- No manual calibration needed
+- Self-optimizing over time
+
+**Implementation:**
+- Run calculation weekly
+- Gradually transition thresholds (don't shock-change)
+- Show user: "Your thresholds were updated based on your patterns"
+- Allow manual override
+
+#### 3.2 Session Trajectory Analysis
+
+**Objective:** Track how posture changes over session duration
+
+**Data to capture:**
+```
+Every 5 minutes of session, record:
+- Average angle in this 5-min window
+- Percentage good posture in this window
+- Trend direction (improving/degrading)
+```
+
+**Analysis after session:**
+```
+Calculate:
+- Starting posture quality (first 10 minutes)
+- Ending posture quality (last 10 minutes)
+- Degradation rate: (end_quality - start_quality) / duration
+- Best 5-minute window
+- Worst 5-minute window
+```
+
+**Insights to show user:**
+```
+"Your posture was excellent for the first hour, then declined"
+"You maintained consistent posture throughout - great job!"
+"Your posture degrades most between 2-3pm"
+```
+
+**Use for alerts:**
+- If degradation rate exceeds threshold → earlier alert
+- If posture consistent → reduce alert frequency
+
+#### 3.3 Dynamic Baseline Adjustment
+
+**Objective:** Account for natural fatigue during long sessions
+
+**Problem:**
+- Fresh morning posture: 35° average
+- Tired afternoon posture: 50° average
+- Shouldn't penalize natural fatigue
+
+**Solution - Gradual baseline drift:**
+
+**Every 30 minutes:**
+```
+current_30min_average = mean angle of last 30 minutes
+
+If current_30min_average > baseline + 10°:
+    // User's posture has degraded
+    baseline = baseline + 2°  // Gradual adjustment
+    // Don't fully jump to new baseline
+    
+If current_30min_average < baseline - 10°:
+    // User improved posture
+    baseline = baseline - 2°
+```
+
+**Limits:**
+```
+Don't drift more than ±15° from original calibration
+If drift exceeds 15° → suggest recalibration
+Reset baseline each morning (6 AM)
+```
+
+**Benefits:**
+- Tracks relative degradation, not absolute
+- More encouraging scoring
+- Reflects realistic human behavior
+
+---
+
+## Accuracy Expectations by Phase
+
+**Baseline (raw gyroscope, no filtering):**
+- ~70% accuracy
+- Many false positives/negatives
+- Jittery, unreliable
+
+**Phase 1 Complete (CMDeviceMotion + filtering + context):**
+- ~85% accuracy (+15% improvement)
+- Smooth, stable readings
+- Handles most edge cases
+- **Sufficient for MVP launch**
+
+**Phase 2 Complete (+ personalization):**
+- ~90% accuracy (+5% improvement)
+- Adapted to individual users
+- Fewer false alerts
+- Better user experience
+
+**Phase 3 Complete (+ adaptive features):**
+- ~92% accuracy (+2% improvement)
+- Self-optimizing
+- Context-aware
+- Diminishing returns beyond this
+
+**Note:** Going beyond 92% requires camera/AirPods (not worth the trade-offs for MVP)
+
+---
+
+## Implementation Checklist
+
+### Week 3-4: Core Tracking
+- [ ] Create Flutter MethodChannel for native iOS communication
+- [ ] Implement iOS native code to access CMMotionManager
+- [ ] Start/stop device motion updates with HealthKit workout
+- [ ] Stream pitch and roll data to Flutter
+- [ ] Calculate 3D tilt angle (sqrt of pitch² + roll²)
+- [ ] Implement 5-point moving average filter
+- [ ] Detect face-down orientation
+- [ ] Detect landscape orientation
+- [ ] Reject outlier readings (>30° instant change)
+- [ ] Test on physical device (simulators don't have motion sensors)
+- [ ] Measure battery impact (should be <5% per hour)
+
+### Week 5-6: Personalization
+- [ ] Build calibration UI flow in onboarding
+- [ ] Capture 10-second samples for good/reading posture
+- [ ] Calculate and store personal thresholds
+- [ ] Implement temporal smoothing (5-second threshold)
+- [ ] Only count sustained poor posture
+- [ ] Allow recalibration in settings
+- [ ] Test with 5+ users of different heights
+
+### Week 7-8: Polish (If Time Allows)
+- [ ] Implement percentile-based threshold calculation
+- [ ] Track 5-minute session windows
+- [ ] Calculate session trajectory metrics
+- [ ] Show insights on session summary screen
+- [ ] Implement dynamic baseline adjustment
+- [ ] Add "degradation rate" analysis
+
+---
+
+## Testing Strategy
+
+### Accuracy Testing
+
+**Test scenarios:**
+1. **Sitting at desk, phone in hand**
+   - Expected: 30-50° angle (good posture)
+   - Track for 15 minutes, verify stable readings
+
+2. **Lying down, phone overhead**
+   - Expected: 0-20° angle (phone vertical)
+   - Should show good posture, not poor
+
+3. **Hunched scrolling**
+   - Expected: 60-80° angle (poor posture)
+   - Should trigger alert after 30 minutes
+
+4. **Walking with phone**
+   - Expected: Fluctuating angles
+   - Should auto-pause or smooth out readings
+
+5. **Phone on table face-up**
+   - Expected: 0° tilt
+   - Should auto-pause after 5 minutes
+
+6. **Video watching (landscape)**
+   - Expected: 90° roll angle
+   - Should use landscape thresholds
+
+**Validation:**
+- Compare reported angles with manual measurements (protractor app)
+- Target: ±5° accuracy
+- False positive rate <10%
+- False negative rate <10%
+
+### Battery Testing
+
+**Test protocol:**
+1. Fully charge device
+2. Start tracking session
+3. Use phone normally for 2 hours
+4. Check battery percentage
+5. Calculate drain rate
+
+**Acceptance criteria:**
+- <10% battery drain per 2 hours
+- <5% per hour is ideal
+- If >10%, optimize sampling rate
+
+### Performance Testing
+
+**Metrics to measure:**
+- Sensor reading processing time (<10ms)
+- UI update latency (<100ms)
+- Memory usage (<50MB)
+- No dropped frames during tracking
+
+---
+
+## Common Pitfalls & Solutions
+
+### Pitfall 1: Gyroscope Drift
+**Problem:** Raw gyroscope accumulates error over time
+**Solution:** Use CMDeviceMotion (includes auto-calibration)
+
+### Pitfall 2: Noisy Readings
+**Problem:** Jittery angle values make UI unstable
+**Solution:** Moving average filter + outlier rejection
+
+### Pitfall 3: False Positives While Walking
+**Problem:** Walking creates fluctuating angles
+**Solution:** Detect sustained poor posture (>5 seconds)
+
+### Pitfall 4: Wrong Thresholds for User
+**Problem:** One size doesn't fit all
+**Solution:** Personal calibration during onboarding
+
+### Pitfall 5: Battery Drain
+**Problem:** Too frequent sensor sampling
+**Solution:** 5-second intervals (0.2 Hz), not continuous
+
+### Pitfall 6: Landscape Mode Confusion
+**Problem:** Video watching shows as poor posture
+**Solution:** Detect landscape, use adjusted thresholds
+
+---
+
+## Technical Architecture
+
+### Data Flow
+
+```
+1. CMMotionManager (iOS Native)
+   ↓ (every 5 seconds)
+2. Platform Channel
+   ↓ (stream)
+3. Flutter Motion Service
+   ↓ (process)
+4. Angle Calculation (pitch + roll → tilt)
+   ↓
+5. Moving Average Filter
+   ↓
+6. Outlier Rejection
+   ↓
+7. Threshold Comparison
+   ↓
+8. Posture State (Good/Fair/Poor)
+   ↓
+9. Update UI + Character
+   ↓
+10. Save to Database (every 60 seconds)
+```
+
+### Key Classes to Implement
+
+**Flutter Side:**
+```
+MotionService:
+  - Manages platform channel
+  - Receives sensor data stream
+  - Applies filtering algorithms
+  - Calculates posture state
+  - Notifies UI of changes
+
+PostureCalculator:
+  - Converts pitch/roll to tilt angle
+  - Applies moving average
+  - Compares against thresholds
+  - Returns posture state
+
+FilterService:
+  - Moving average buffer
+  - Outlier rejection logic
+  - Context detection
+
+CalibrationService:
+  - Manages personal thresholds
+  - Handles calibration flow
+  - Stores user preferences
+```
+
+**iOS Native Side:**
+```
+MotionManager:
+  - Wraps CMMotionManager
+  - Starts/stops device motion updates
+  - Streams attitude data to Flutter
+  - Handles sensor availability checks
+
+MotionChannel:
+  - MethodChannel implementation
+  - Bridges Swift/Objective-C to Flutter
+  - Handles start/stop commands
+  - Sends sensor data stream
+```
+
+---
+
+## Appendix: Reference Values
+
+### Typical Angle Ranges by Activity
+
+```
+Phone perfectly vertical: 0-10°
+Good reading posture: 25-45°
+Typical usage: 40-60°
+Poor posture (hunched): 65-85°
+Phone horizontal (on table): 85-95°
+```
+
+### Calibration Defaults (If User Skips)
+
+```
+Good posture threshold: 45°
+Poor posture threshold: 70°
+Alert after: 30 minutes poor posture
+Moving average: 5 readings
+Temporal threshold: 5 seconds
+```
+
+### Recommended Sampling Rates
+
+```
+CMDeviceMotion update interval: 0.2 seconds (5 Hz)
+UI update frequency: 30 seconds
+Database save frequency: 60 seconds
+Context check frequency: 30 seconds
+```
+
+---
+
+## Summary: Key Takeaways
+
+1. **Use CMDeviceMotion, not raw gyroscope** - Single biggest accuracy improvement
+2. **Calculate 3D tilt angle** - Don't just use pitch, combine pitch + roll
+3. **Apply moving average** - Smooth out noise for stable readings
+4. **Personal calibration matters** - One size doesn't fit all body types
+5. **Filter temporal noise** - Only count sustained poor posture (>5 seconds)
+6. **Detect context** - Auto-pause for face-down, landscape, charging
+7. **Test on real devices** - Simulators don't have motion sensors
+8. **Optimize for battery** - 5-second sampling is sweet spot
+9. **85-90% accuracy is achievable** - Without camera, AirPods, or excessive complexity
+10. **Ship MVP first** - Validate concept before over-engineering
+
+---
+
+**Implementation Priority:**
+Week 3-4: CMDeviceMotion + 3D tilt + filtering + context = 85% accuracy ✅ (SUFFICIENT FOR MVP)
+Week 5-6: + Calibration + temporal smoothing = 90% accuracy (NICE POLISH)
+Week 7-8: + Adaptive features = 92% accuracy (DIMINISHING RETURNS)
+
+**Document Version:** 1.0
+**Status:** Ready for Implementation
+**Target Accuracy:** 85-90% for MVP

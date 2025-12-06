@@ -85,7 +85,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   final PostureService _postureService = PostureService.instance;
   
   /// Start a new tracking session
-  void startSession() {
+  Future<void> startSession() async {
     if (state.isTracking) return;
     
     final session = Session(
@@ -109,9 +109,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
       }
     });
     
-    // Start sensor listening
-    _postureService.startListening(
-      sampleInterval: Duration(seconds: AppConstants.sensorSampleIntervalSeconds),
+    // Start sensor listening (now async with CMDeviceMotion)
+    await _postureService.startListening(
+      intervalSeconds: AppConstants.sensorSampleIntervalSeconds.toDouble() / 1000,
     );
     
     // Listen to angle updates
@@ -137,7 +137,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _timer?.cancel();
     _sensorTimer?.cancel();
     _angleSubscription?.cancel();
-    _postureService.stopListening();
+    await _postureService.stopListening();
     
     final session = state.currentSession?.copyWith(
       endTime: DateTime.now(),
