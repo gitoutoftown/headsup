@@ -9,6 +9,7 @@ import '../models/session.dart';
 import '../models/daily_summary.dart';
 import '../services/supabase_service.dart';
 import '../services/posture_service.dart';
+import '../services/live_activity_channel.dart';
 import '../utils/constants.dart';
 
 /// Current session state
@@ -143,6 +144,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
     
     // Listen to angle updates
     _angleSubscription = _postureService.angleStream.listen(_onAngleUpdate);
+    
+    // Start Live Activity for Dynamic Island
+    await LiveActivityChannel.start(
+      sessionId: session.id,
+      currentState: state.postureState.name,
+      totalPoints: 0,
+      pointsPerMinute: state.postureState.pointsPerMinute,
+      angle: 0,
+    );
   }
   
   /// Pause the current session
@@ -165,6 +175,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _sensorTimer?.cancel();
     _angleSubscription?.cancel();
     await _postureService.stopListening();
+    
+    // End Live Activity
+    await LiveActivityChannel.end();
     
     // Calculate good posture seconds as excellent + good + okay
     final goodPostureTotal = state.excellentSeconds + state.goodSeconds + state.okaySeconds;
@@ -228,6 +241,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
       poorSeconds: currentState == PostureState.poor 
           ? state.poorSeconds + 1 
           : state.poorSeconds,
+    );
+    
+    // Update Live Activity
+    LiveActivityChannel.update(
+      elapsedSeconds: newElapsed,
+      currentState: currentState.name,
+      totalPoints: newPoints,
+      pointsPerMinute: currentState.pointsPerMinute,
+      angle: state.currentAngle,
     );
   }
   
