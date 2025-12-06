@@ -1,0 +1,45 @@
+name: headsup_app
+description: "HeadsUp - Minimalist posture tracking app"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  cupertino_icons: ^1.0.8
+  
+  # Supabase
+  supabase_flutter: ^2.8.0
+  
+  # State Management
+  flutter_riverpod: ^2.6.1
+  
+  # Sensors & Health
+  sensors_plus: ^6.1.1
+  health: ^13.1.4
+  
+  # UI & Animations
+  flutter_animate: ^4.5.2
+  fl_chart: ^0.70.2
+  
+  # Local Storage & Utils
+  shared_preferences: ^2.3.4
+  flutter_local_notifications: ^18.0.1
+  vibration: ^2.0.1
+  
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

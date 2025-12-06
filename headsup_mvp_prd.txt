@@ -1,0 +1,766 @@
+# Product Requirements Document: HeadsUp (MVP)
+
+## 1. Product Overview
+
+### 1.1 Product Name
+HeadsUp
+
+### 1.2 Product Vision
+A minimalist iOS posture tracking app that uses continuous gyroscope monitoring to help users prevent tech neck through gentle visual feedback and real-time awareness.
+
+### 1.3 Target Audience
+- Primary: Office workers and students (ages 22-40) experiencing neck/shoulder discomfort
+- Secondary: Preventive health-conscious smartphone users
+
+### 1.4 Core Value Proposition
+Unlike reminder-based apps, HeadsUp provides continuous automatic tracking while you use any app, with a simple animated character that reflects your posture throughout the day—no nagging alerts, just gentle awareness.
+
+### 1.5 MVP Philosophy
+**Launch fast, learn fast.** MVP focuses on:
+- Core tracking that works reliably
+- One compelling visual feature (the character)
+- Simple, beautiful UX
+- No social features (add post-launch based on demand)
+- Free to download (monetization in future version)
+
+---
+
+## 2. Success Metrics (MVP)
+
+### 2.1 Primary Metrics
+- Week 1 retention: >40%
+- Week 4 retention: >20%
+- Average daily tracking time: >2 hours
+- App Store rating: >4.0 stars
+
+### 2.2 Engagement Metrics
+- Average sessions per user per day: 1-2
+- Session completion rate: >70% (users who start actually complete sessions)
+- Onboarding completion: >60%
+
+### 2.3 Quality Metrics
+- Crash-free rate: >99%
+- Battery drain: <5% per hour of tracking
+- Negative reviews mentioning battery: <10%
+
+---
+
+## 3. User Persona (Primary)
+
+### "Desk Worker Dan"
+- Age: 28
+- Occupation: Remote software developer
+- Pain points: Chronic neck tension, hunches unconsciously during deep work, tried posture apps but found alerts annoying
+- Goals: Build awareness without disruption, see gradual improvement, simple tool that "just works"
+- Tech savviness: High
+- Usage pattern: 1-2 long sessions (4-8 hours) during work hours
+
+---
+
+## 4. MVP Feature Set
+
+### 4.1 Core Tracking Engine
+
+#### 4.1.1 Tracking Mechanism
+- Use Flutter plugins to access iOS gyroscope sensor
+- Leverage HealthKit Workout API for background access
+- Sample gyroscope every 5 seconds during active session
+- Calculate phone angle: degrees from vertical (0° = vertical/perfect, 90° = horizontal/hunched)
+- Define thresholds: Good posture = 0-45°, Poor posture = 46-90°
+
+#### 4.1.2 Session Management
+- User manually starts/stops tracking sessions
+- Minimum session: 15 minutes
+- Maximum session: 8 hours (HealthKit limit)
+- Sessions run in background while using other apps
+- Auto-save session data every 60 seconds
+
+#### 4.1.3 Data Collected Per Session
+- Total duration
+- Time in good posture (0-45°)
+- Time in poor posture (46-90°)
+- Average angle
+- Posture score: (good time / total time) × 100
+
+#### 4.1.4 Data Collected Per Day
+- Total tracked time
+- Daily posture score (weighted average of all sessions)
+- Number of sessions completed
+
+### 4.2 Visual Character System (Primary Differentiator)
+
+#### 4.2.1 Character Design
+- Minimalist line-art humanoid figure
+- Single color (black on white, white on dark mode)
+- Simple geometric shapes: circle head, curved line spine, straight lines for limbs
+- Clean, modern aesthetic (think: Apple's Health app illustrations)
+- No facial features (pure posture visualization)
+
+#### 4.2.2 Character States (3 States Only for MVP)
+**Good (Score 70-100):**
+- Straight vertical spine
+- Head aligned over shoulders
+- Shoulders level
+
+**Fair (Score 40-69):**
+- Slight spine curve forward
+- Head slightly forward
+
+**Poor (Score 0-39):**
+- Pronounced forward spine curve
+- Head significantly forward
+- Shoulders rounded
+
+#### 4.2.3 Character Behavior
+- Real-time updates during active session (refreshes every 30 seconds)
+- Smooth transitions between states (1-second animation)
+- Character on home screen reflects daily cumulative score
+- Resets to neutral state each day at 6 AM
+
+#### 4.2.4 Character Locations
+- Home screen: Large character display (60% of screen)
+- Active session screen: Medium character (real-time state)
+- No widgets for MVP (add later)
+
+### 4.3 Alert System (Minimal)
+
+#### 4.3.1 In-Session Alerts
+- Single alert type: Gentle haptic vibration (light tap pattern)
+- Triggered after: 30 continuous minutes of poor posture
+- Frequency limit: Maximum 1 alert per 30 minutes
+- No audio alerts
+- No push notifications during session
+- Visual indicator: Character subtly "shakes" when alert fires
+
+#### 4.3.2 Session Reminders
+- Daily reminder: "Start your HeadsUp session" (user sets time in settings)
+- Only if user hasn't tracked yet that day
+- Can be disabled in settings
+
+### 4.4 User Interface (Minimalist)
+
+#### 4.4.1 App Structure
+Single-page app with bottom sheet modals for secondary screens.
+
+**Main Screen (Home):**
+- Top 60%: Large character visualization
+- Below character: Today's posture score (large number, minimal decoration)
+- Below score: Time tracked today
+- Bottom: Large "Start Tracking" button (primary CTA)
+- Floating menu button (top right): Access settings
+
+**Active Session Screen:**
+- Top 50%: Character (real-time state)
+- Middle section: Current angle indicator (simple arc/gauge, minimal)
+- Session timer
+- Good/poor time split (simple horizontal bar)
+- Bottom: "End Session" button (prominent)
+- "Pause" text button (subtle)
+
+**Session Summary Screen:**
+- Session posture score (large, centered)
+- Character's final state
+- Stats in minimal cards: Total time, Good %, Average angle
+- Simple line graph: posture quality over session duration
+- Button: "Done"
+
+**Settings Screen (Bottom sheet):**
+- Posture threshold adjustment (slider: 40-50° cutoff)
+- Good posture angle definition (default 45°)
+- Alert toggle (on/off)
+- Daily reminder toggle and time picker
+- Auto-pause when phone face-down (toggle)
+- About/Help/Privacy Policy links
+
+**Onboarding (3 Screens):**
+1. Welcome + value proposition
+2. HealthKit permission request + explanation
+3. Calibration tutorial (hold phone at various angles)
+
+#### 4.4.2 Design System
+
+**Colors (Minimalist):**
+- Background: Pure white (light mode), Pure black (dark mode)
+- Primary: Single accent color (soft blue: #4A90E2)
+- Text: Black/white with reduced opacity for hierarchy
+- Character: Black (light mode), White (dark mode)
+- Alerts: Subtle orange (#FF9500)
+
+**Typography:**
+- Single font: SF Pro (iOS native, Flutter's SF Pro equivalent)
+- Size scale: 48pt (hero numbers), 24pt (titles), 17pt (body), 13pt (captions)
+- Weight scale: Bold (scores), Regular (body), Light (secondary)
+
+**Spacing:**
+- Base unit: 8px
+- Consistent 16px/24px padding throughout
+- Generous whitespace (don't crowd elements)
+
+**Components:**
+- Buttons: Rounded rectangles (12px radius), solid fill for primary, outline for secondary
+- Cards: Subtle shadow (elevation 1), 16px radius
+- Inputs: Minimalist with bottom border only
+- No gradients, no textures, no decorative elements
+
+#### 4.4.3 Animations
+- Character state transitions: 1-second ease-in-out
+- Button taps: Scale down 0.95 with spring
+- Screen transitions: Simple fade or slide
+- All animations respect system "Reduce Motion" setting
+- Maximum 60fps (Flutter default)
+
+### 4.5 Data & Analytics (Basic)
+
+#### 4.5.1 History View (Bottom sheet from home)
+- Last 7 days only for MVP
+- Simple list: Date, Posture score, Time tracked
+- Tap day to see session details
+- No graphs (too complex for MVP)
+
+#### 4.5.2 No Advanced Insights
+- No app correlation tracking
+- No pattern detection
+- No recommendations
+- Keep it simple: just show the data
+
+---
+
+## 5. User Flows (MVP)
+
+### 5.1 First Launch Flow
+
+1. User downloads and opens app
+2. Welcome screen: "HeadsUp helps you build better posture habits" + "Continue" button
+3. Permission screen: "HeadsUp needs HealthKit access to track continuously while you use other apps. This appears as a 'workout' in your Health app, but it's just posture tracking." + System permission dialog
+4. Calibration screen: "Hold your phone at eye level" → shows angle in real-time → "Perfect! This is good posture (35°)" → "Now look down at your phone" → "This is poor posture (75°). HeadsUp will help you notice this." + "Got it" button
+5. Main screen appears
+
+### 5.2 Primary Flow: Tracking Session
+
+1. User opens app (main screen shows character in neutral state)
+2. User taps "Start Tracking"
+3. System starts HealthKit workout session
+4. Session screen appears: Character animating in real-time, timer running, angle gauge showing current tilt
+5. User minimizes app, opens Instagram
+6. HeadsUp continues tracking in background
+7. After 40 minutes of hunched scrolling, user feels gentle haptic tap
+8. User realizes posture is poor, raises phone
+9. Character slowly transitions from "Poor" to "Fair" over next 2 minutes
+10. User continues session for 3 more hours (working on laptop, occasional phone checks)
+11. User returns to app, taps "End Session"
+12. Summary screen shows: Score 72, Character in "Fair" state, 4h 15m total, 68% good posture
+13. User taps "Done"
+14. Returns to home screen, character now shows daily state (updated from session)
+
+### 5.3 Return User Flow (Next Day)
+
+1. User receives daily reminder notification: "Start your HeadsUp session"
+2. User opens app
+3. Home screen shows: Yesterday's character state (Fair), Today's score: 0 (not tracked yet), "Start Tracking" button
+4. Character has reset to neutral/good state (new day)
+5. User starts session
+6. Repeat tracking flow
+
+---
+
+## 6. Technical Requirements
+
+### 6.1 Platform & Tech Stack
+
+#### 6.1.1 Development Framework
+- **Flutter** (latest stable version)
+- Dart language
+- Target: iOS 16.0+ (for HealthKit Workout features)
+- Device support: iPhone XR and newer
+
+#### 6.1.2 Required Flutter Packages
+- `health` or `fit_kit`: HealthKit integration for workout sessions
+- `sensors_plus`: Gyroscope data access
+- `flutter_local_notifications`: Daily reminders
+- `shared_preferences`: Settings storage
+- `sqflite`: Local database for session history
+- `fl_chart`: Minimal charting for session summary graph
+- `flutter_animate`: Simple animations
+
+#### 6.1.3 Architecture
+- Simple state management: `Provider` or `Riverpod`
+- Local-first: All data stored on device (no backend for MVP)
+- No cloud sync (add later)
+- No user accounts (add later)
+
+### 6.2 Data Storage
+
+#### 6.2.1 Local Database (SQLite via sqflite)
+
+**Sessions Table:**
+- id, start_time, end_time, duration_seconds, good_posture_seconds, poor_posture_seconds, average_angle, posture_score
+
+**Daily_Summaries Table:**
+- date, total_tracked_seconds, daily_posture_score, session_count
+
+**Settings Table:**
+- key-value pairs for user preferences
+
+#### 6.2.2 Data Retention
+- Keep all session data (no automatic deletion)
+- User can manually clear history in settings
+
+### 6.3 Background Tracking Implementation
+
+#### 6.3.1 HealthKit Workout Session
+- Use `HKWorkoutActivityType.other` or `HKWorkoutActivityType.mindAndBody`
+- Start workout session when user taps "Start Tracking"
+- Query gyroscope every 5 seconds while session is active
+- HealthKit workout keeps app active in background
+- Handle workout session lifecycle: start, pause, resume, end
+
+#### 6.3.2 Gyroscope Reading
+- Use `sensors_plus` to access accelerometer/gyroscope
+- Calculate device tilt angle from sensor data
+- Filter out rapid movements (debounce)
+- Detect and handle sensor failures gracefully
+
+#### 6.3.3 Auto-Pause Scenarios
+- Phone face-down for >2 minutes: auto-pause
+- Phone completely still for >10 minutes: prompt user if session should continue
+- Device charging + stationary for >5 minutes: prompt user
+
+### 6.4 Performance Requirements
+
+#### 6.4.1 Responsiveness
+- App launch: <2 seconds
+- Session start: <1 second
+- Screen transitions: <300ms
+- Character animation: Smooth 60fps
+
+#### 6.4.2 Battery Optimization
+- Target: <5% battery per hour
+- Sample gyroscope at 0.2 Hz (every 5 seconds), not continuous
+- Reduce sampling to 0.1 Hz when battery <20%
+- Use low-power sensor APIs
+
+#### 6.4.3 Memory Management
+- Keep memory footprint <50MB during active session
+- Properly dispose of sensor listeners
+- Batch save data (don't write to DB every reading)
+
+### 6.5 Accessibility (Basic for MVP)
+
+- Support iOS Dynamic Type (text scaling)
+- Minimum contrast ratios (WCAG AA)
+- VoiceOver: Label all buttons and interactive elements
+- Describe character state in words for screen readers
+- Respect "Reduce Motion" setting
+
+---
+
+## 7. Design Specifications
+
+### 7.1 Home Screen Layout
+
+```
+┌─────────────────────────────┐
+│ [≡]                    │ Settings icon (top right)
+│                         │
+│                         │
+│         (Character)     │ Large character (60% of screen)
+│          ┃              │ 
+│         ╱ ╲             │
+│        ╱   ╲            │
+│                         │
+│          72             │ Today's score (48pt bold)
+│      Posture Score      │ (13pt light)
+│                         │
+│     2h 34m tracked      │ (17pt regular)
+│                         │
+│                         │
+│  [  Start Tracking  ]   │ Large button (56px height)
+│                         │
+└─────────────────────────────┘
+```
+
+### 7.2 Active Session Screen Layout
+
+```
+┌─────────────────────────────┐
+│                         │
+│      (Character)        │ Medium character (40% screen)
+│         ┃╲              │ Showing current state
+│        ╱  ╲             │
+│                         │
+│         52°             │ Current angle (24pt)
+│                         │
+│    ◡◡◡◡◡━━━━━━━━        │ Arc gauge (good/poor indicator)
+│                         │
+│       1:23:45           │ Session timer (24pt)
+│                         │
+│  ████████░░░░░░        │ Good/poor time bar
+│  Good 1h 10m | Poor 14m│ (13pt)
+│                         │
+│                         │
+│     [  End Session  ]   │ Primary button
+│         Pause           │ Text button (subtle)
+│                         │
+└─────────────────────────────┘
+```
+
+### 7.3 Session Summary Layout
+
+```
+┌─────────────────────────────┐
+│                         │
+│       Session Complete  │ (24pt)
+│                         │
+│      (Character)        │ Final state
+│         ┃╲              │
+│        ╱  ╲             │
+│                         │
+│          68             │ Session score (48pt)
+│                         │
+│  ┌─────────────────┐   │
+│  │  3h 42m         │   │ Stats cards
+│  └─────────────────┘   │
+│  ┌─────────────────┐   │
+│  │  72% Good       │   │
+│  └─────────────────┘   │
+│                         │
+│  [Simple line graph]    │ Posture over time
+│                         │
+│       [  Done  ]        │
+└─────────────────────────────┘
+```
+
+### 7.4 Character Visual States
+
+**Good (Straight):**
+```
+    ●          Head: circle
+    ┃          Spine: straight vertical line
+   ╱┃╲         Arms: slight angle
+  ╱ ┃ ╲        Shoulders: level
+    ┃          
+   ╱ ╲         Legs: slight stance
+```
+
+**Fair (Slight curve):**
+```
+   ●           Head: slightly forward
+   ┃╲          Spine: gentle forward curve
+  ╱  ╲         
+ ╱    ╲        
+   ┃           
+  ╱ ╲          
+```
+
+**Poor (Hunched):**
+```
+  ●            Head: significantly forward
+  ┃╲╲          Spine: pronounced curve
+ ╱   ╲         Shoulders: rounded
+╱     ╲        
+  ┃            
+ ╱ ╲           
+```
+
+---
+
+## 8. MVP Scope Definition
+
+### 8.1 What's IN the MVP
+
+**Must Have:**
+✅ Continuous gyroscope tracking via HealthKit Workout
+✅ Character with 3 visual states (Good/Fair/Poor)
+✅ Session management (start/pause/end)
+✅ Basic posture score calculation
+✅ Simple haptic alert after 30min poor posture
+✅ Home screen with character and start button
+✅ Active session screen with real-time feedback
+✅ Session summary screen
+✅ Last 7 days history (simple list)
+✅ Basic settings (threshold, alerts, reminder)
+✅ Onboarding with calibration
+✅ Dark mode support
+✅ iPhone only
+
+### 8.2 What's OUT of MVP (Future Versions)
+
+**Phase 2 (Post-Launch):**
+❌ Widgets (Home Screen, Lock Screen)
+❌ Live Activities / Dynamic Island
+❌ Extended history (30+ days)
+❌ Advanced analytics and insights
+❌ App usage correlation tracking
+❌ Stretch exercise library
+❌ Character customization (skins, outfits)
+❌ Achievement system
+❌ Streaks and gamification
+
+**Phase 3 (6+ months):**
+❌ Social features (friends, challenges, leaderboards)
+❌ Premium subscription
+❌ Cloud sync across devices
+❌ User accounts
+❌ iPad support
+❌ Apple Watch companion
+❌ Export/reports
+❌ Integration with physical therapy programs
+
+---
+
+## 9. Development Phases
+
+### 9.1 Phase 1: Foundation (Weeks 1-2)
+
+**Goals:**
+- Project setup and architecture
+- Basic UI screens (no real data)
+- Character design and animation system
+
+**Deliverables:**
+- Flutter project initialized
+- Navigation structure
+- Static character illustrations (3 states)
+- Character transition animations
+- Home screen mockup (static)
+- Session screen mockup (static)
+
+### 9.2 Phase 2: Core Tracking (Weeks 3-4)
+
+**Goals:**
+- Implement gyroscope reading
+- HealthKit workout integration
+- Posture calculation algorithm
+- Data persistence
+
+**Deliverables:**
+- Gyroscope data flowing in real-time
+- Workout session starts/stops
+- Angle calculation working
+- Sessions save to local database
+- Basic posture score algorithm
+
+### 9.3 Phase 3: Integration (Weeks 5-6)
+
+**Goals:**
+- Connect tracking to UI
+- Real-time character updates
+- Session management polish
+
+**Deliverables:**
+- Character responds to real posture data
+- Session timer and stats update live
+- Pause/resume functionality
+- Session summary with real data
+- History view shows saved sessions
+
+### 9.4 Phase 4: Polish & Features (Weeks 7-8)
+
+**Goals:**
+- Haptic alerts
+- Settings implementation
+- Onboarding flow
+- Bug fixes
+
+**Deliverables:**
+- Alert system functional
+- All settings working
+- Calibration tutorial
+- Dark mode implemented
+- Accessibility basics
+- Error handling
+
+### 9.5 Phase 5: Testing & Launch Prep (Weeks 9-10)
+
+**Goals:**
+- Beta testing
+- Performance optimization
+- App Store preparation
+
+**Deliverables:**
+- TestFlight build for 20-50 beta users
+- Battery optimization validated
+- Crash fixes
+- App Store listing (screenshots, description)
+- Privacy policy and terms
+- Submit to App Store
+
+**Target Launch:** Week 11
+
+---
+
+## 10. Success Criteria & Launch Checklist
+
+### 10.1 Pre-Launch Checklist
+
+**Technical:**
+- [ ] No crashes during 50+ hours of testing
+- [ ] Battery drain measured <5% per hour on iPhone 12/13/14
+- [ ] Works on oldest supported device (iPhone XR, iOS 16)
+- [ ] Gyroscope tracking accurate (±5° margin of error)
+- [ ] Background tracking works while using other apps
+- [ ] Dark mode fully functional
+- [ ] All text scales with Dynamic Type
+
+**Content:**
+- [ ] Onboarding explains workout API clearly
+- [ ] Privacy policy published
+- [ ] Terms of service published
+- [ ] App Store description written
+- [ ] 6.5" and 5.5" screenshots created
+- [ ] App icon finalized (1024x1024)
+
+**Testing:**
+- [ ] TestFlight beta with 20+ users completed
+- [ ] Beta feedback incorporated
+- [ ] No critical bugs remaining
+- [ ] Performance benchmarks met
+
+### 10.2 Launch Goals (First 30 Days)
+
+**Adoption:**
+- 1,000+ downloads
+- 50%+ onboarding completion
+- 40%+ Day 7 retention
+
+**Quality:**
+- 4.0+ star rating
+- <2% crash rate
+- <5% negative battery reviews
+
+**Engagement:**
+- 2+ hours average daily tracking
+- 60%+ of users start 2nd session
+
+### 10.3 Post-Launch Learning Goals
+
+**User Research Questions:**
+- Do users understand the character metaphor?
+- Is the 30-minute alert timing right, or too frequent/infrequent?
+- Are users checking the app outside of sessions?
+- What features do users request most?
+- Do users want social features?
+- Would users pay for premium features?
+
+**Data to Monitor:**
+- Session completion rate
+- Time between sessions
+- Settings most frequently changed
+- Onboarding drop-off points
+- Support ticket themes
+
+---
+
+## 11. Known Constraints & Risks
+
+### 11.1 Technical Constraints
+
+**HealthKit Workout Limitations:**
+- 8-hour maximum session length
+- Sessions show in Apple Fitness app (might confuse users)
+- Requires HealthKit permission (some users may decline)
+
+**Flutter + iOS Integration:**
+- HealthKit support via plugins may be limited
+- Need to ensure reliable background execution
+- May need to write platform-specific code (iOS native)
+
+**Background Execution:**
+- iOS may terminate app in extreme low-memory situations
+- Must save data incrementally to avoid loss
+
+### 11.2 UX Risks
+
+**Risk:** Users don't understand why it's a "workout"
+- **Mitigation:** Clear onboarding explanation, FAQ in app
+
+**Risk:** Alerts are too frequent/annoying
+- **Mitigation:** Conservative default (30 min), easy to disable
+
+**Risk:** Character feels judgmental instead of helpful
+- **Mitigation:** No negative expressions, neutral design, beta user testing
+
+### 11.3 Market Risks
+
+**Risk:** Insufficient differentiation from existing apps
+- **Mitigation:** Character is unique, emphasize continuous tracking in marketing
+
+**Risk:** App Store rejection for workout API usage
+- **Mitigation:** Clear review notes, cite precedent apps, have backup plan
+
+---
+
+## 12. Open Questions & Decisions
+
+### 12.1 Design Decisions
+- [ ] Final character illustration style (line art thickness, proportions)
+- [ ] Exact accent color (#4A90E2 or explore alternatives)
+- [ ] Character animation timing (1 second or 2 seconds for transitions)
+
+### 12.2 Technical Decisions
+- [ ] Which Flutter HealthKit plugin? (`health` package vs custom implementation)
+- [ ] State management: Provider or Riverpod?
+- [ ] Analytics: None for MVP, or minimal (Firebase Analytics)?
+
+### 12.3 Product Decisions
+- [ ] Default posture threshold: 45° or 50°?
+- [ ] Alert timing: 30 min or 20 min of poor posture?
+- [ ] Should we show angle number to users, or keep it abstract?
+- [ ] Free app with future premium, or free trial model from start?
+
+---
+
+## 13. Post-MVP Roadmap (High-Level)
+
+### Version 1.1 (1-2 months post-launch)
+- Lock Screen widget (character snapshot)
+- Extended history (30 days)
+- Weekly summary notification
+- Basic achievements/badges
+
+### Version 1.5 (3-4 months post-launch)
+- Live Activities for active sessions
+- Stretch exercise library (5-10 exercises)
+- Premium subscription introduction
+- Cloud backup
+
+### Version 2.0 (6+ months post-launch)
+- Social features (friends, challenges)
+- Advanced analytics
+- Character customization
+- Apple Watch companion
+
+---
+
+## 14. Appendix
+
+### 14.1 Glossary
+
+- **HeadsUp:** Product name
+- **Session:** User-initiated tracking period using workout API
+- **Posture Score:** Percentage of time in good posture (0-100)
+- **Character State:** Visual representation (Good/Fair/Poor)
+- **Good Posture:** Phone angle 0-45° from vertical
+- **Poor Posture:** Phone angle 46-90° from vertical
+
+### 14.2 Competitive Apps (Brief)
+- Posture Pro: Exercise-focused, no continuous tracking
+- Hunched: Has gyroscope tracking but limited UX
+- HeadUp: Uses AirPods sensors (different approach)
+- **Gap:** No one has engaging character + continuous tracking + minimalist UX
+
+### 14.3 Key Assumptions
+- Users will accept "workout" labeling if benefits are clear
+- Character metaphor will resonate (needs validation)
+- 30-minute alert threshold is appropriate (may need tuning)
+- Flutter can reliably access HealthKit and background sensors
+- Users want awareness, not constant nagging
+
+---
+
+**Document Version:** 2.0 (MVP Focused)  
+**Product Name:** HeadsUp  
+**Platform:** iOS via Flutter  
+**Design:** Minimalist  
+**Status:** Ready for Development  
+**Target Launch:** 10-11 weeks from start
