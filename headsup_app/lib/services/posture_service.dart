@@ -139,17 +139,42 @@ class PostureService {
   }
   
   /// Calculate 3D tilt angle from pitch and roll
+  /// 0° = phone upright (vertical), 90° = phone flat (horizontal)
   double _calculate3DTiltAngle(double pitch, double roll) {
-    // Convert to absolute values (we care about magnitude, not direction)
-    final pitchAbs = pitch.abs();
-    final rollAbs = roll.abs();
+    // CMDeviceMotion pitch:
+    // - pitch = 0 when phone is vertical (edge on table)
+    // - pitch = -90 when phone is face-up flat
+    // - pitch = 90 when phone is face-down flat
+    // 
+    // For posture tracking, we want:
+    // - 0° = phone held upright at eye level
+    // - 90° = phone flat/horizontal
+    //
+    // So we need to convert: tilt from vertical = 90 - |pitch|
+    // But when phone is truly vertical (screen facing user), pitch is around -90 to 90
+    // depending on which way it's tilted
     
-    // Pythagorean formula for combined tilt
-    // sqrt(pitch² + roll²) gives total tilt from vertical
-    final tiltAngle = math.sqrt(pitchAbs * pitchAbs + rollAbs * rollAbs);
+    // When phone is held normally for reading:
+    // - Screen faces user
+    // - pitch is negative (around -45 to -70 for typical use)
+    // - Absolute pitch close to 90 = upright = good
+    // - Absolute pitch close to 0 = flat = bad
+    
+    // Calculate tilt from vertical
+    // |pitch| close to 90 means upright, close to 0 means flat
+    final pitchAbs = pitch.abs();
+    
+    // Invert: 90 - pitchAbs gives us 0° when upright, 90° when flat
+    final tiltFromVertical = 90.0 - pitchAbs;
+    
+    // Account for roll (left/right tilt) as additional tilt component
+    final rollAbs = roll.abs().clamp(0.0, 45.0); // Cap roll contribution
+    
+    // Combine: primarily pitch-based with roll adjustment
+    final combinedTilt = tiltFromVertical + (rollAbs * 0.3);
     
     // Clamp to reasonable range
-    return tiltAngle.clamp(0, 90);
+    return combinedTilt.clamp(0, 90);
   }
   
   /// Check if reading is valid (outlier rejection)

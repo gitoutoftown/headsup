@@ -2,9 +2,31 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/theme.dart';
 import '../../utils/constants.dart';
+
+/// Haptic feedback interval options
+enum HapticInterval {
+  off(0, 'Off'),
+  oneMinute(1, '1 minute'),
+  fiveMinutes(5, '5 minutes'),
+  fifteenMinutes(15, '15 minutes'),
+  thirtyMinutes(30, '30 minutes'),
+  oneHour(60, '1 hour');
+
+  final int minutes;
+  final String label;
+  const HapticInterval(this.minutes, this.label);
+  
+  static HapticInterval fromMinutes(int minutes) {
+    return HapticInterval.values.firstWhere(
+      (e) => e.minutes == minutes,
+      orElse: () => HapticInterval.thirtyMinutes,
+    );
+  }
+}
 
 class SettingsSheet extends StatefulWidget {
   const SettingsSheet({super.key});
@@ -14,11 +36,51 @@ class SettingsSheet extends StatefulWidget {
 }
 
 class _SettingsSheetState extends State<SettingsSheet> {
-  double _postureThreshold = 45;
+  double _postureThreshold = 40;
   bool _alertsEnabled = true;
+  HapticInterval _badPostureInterval = HapticInterval.thirtyMinutes;
+  HapticInterval _poorPostureInterval = HapticInterval.fifteenMinutes;
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
   bool _autoPauseEnabled = true;
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+  
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _postureThreshold = prefs.getDouble('postureThreshold') ?? 40;
+      _alertsEnabled = prefs.getBool('alertsEnabled') ?? true;
+      _badPostureInterval = HapticInterval.fromMinutes(
+        prefs.getInt('badPostureIntervalMinutes') ?? 30,
+      );
+      _poorPostureInterval = HapticInterval.fromMinutes(
+        prefs.getInt('poorPostureIntervalMinutes') ?? 15,
+      );
+      _reminderEnabled = prefs.getBool('reminderEnabled') ?? true;
+      _autoPauseEnabled = prefs.getBool('autoPauseEnabled') ?? true;
+      
+      final hour = prefs.getInt('reminderHour') ?? 9;
+      final minute = prefs.getInt('reminderMinute') ?? 0;
+      _reminderTime = TimeOfDay(hour: hour, minute: minute);
+    });
+  }
+  
+  Future<void> _saveSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('postureThreshold', _postureThreshold);
+    await prefs.setBool('alertsEnabled', _alertsEnabled);
+    await prefs.setInt('badPostureIntervalMinutes', _badPostureInterval.minutes);
+    await prefs.setInt('poorPostureIntervalMinutes', _poorPostureInterval.minutes);
+    await prefs.setBool('reminderEnabled', _reminderEnabled);
+    await prefs.setBool('autoPauseEnabled', _autoPauseEnabled);
+    await prefs.setInt('reminderHour', _reminderTime.hour);
+    await prefs.setInt('reminderMinute', _reminderTime.minute);
+  }
   
   @override
   Widget build(BuildContext context) {
@@ -67,32 +129,88 @@ class _SettingsSheetState extends State<SettingsSheet> {
               ),
               Slider(
                 value: _postureThreshold,
-                min: 30,
+                min: 20,
                 max: 60,
-                divisions: 30,
+                divisions: 40,
                 label: '${_postureThreshold.round()}°',
                 onChanged: (value) {
                   setState(() {
                     _postureThreshold = value;
                   });
+                  _saveSettings();
                 },
               ),
               
               const Divider(height: AppSpacing.xl),
               
-              // Alerts
-              _buildSectionTitle('Alerts'),
+              // Haptic Alerts
+              _buildSectionTitle('Haptic Alerts'),
               SwitchListTile(
-                title: const Text('Haptic Alerts'),
-                subtitle: const Text('Vibrate after 30 min of poor posture'),
+                title: const Text('Enable Haptic Feedback'),
+                subtitle: const Text('Vibrate when posture needs correction'),
                 value: _alertsEnabled,
                 onChanged: (value) {
                   setState(() {
                     _alertsEnabled = value;
                   });
+                  _saveSettings();
                 },
                 contentPadding: EdgeInsets.zero,
               ),
+              
+              if (_alertsEnabled) ...[
+                const SizedBox(height: AppSpacing.md),
+                
+                // Bad posture (41-65°) interval
+                ListTile(
+                  title: const Text('Bad Posture Alert'),
+                  subtitle: const Text('Alert after continuous bad posture'),
+                  trailing: DropdownButton<HapticInterval>(
+                    value: _badPostureInterval,
+                    underline: const SizedBox(),
+                    items: HapticInterval.values.map((interval) {
+                      return DropdownMenuItem(
+                        value: interval,
+                        child: Text(interval.label),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _badPostureInterval = value;
+                        });
+                        _saveSettings();
+                      }
+                    },
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                
+                // Poor posture (66°+) interval
+                ListTile(
+                  title: const Text('Poor Posture Alert'),
+                  subtitle: const Text('Alert after continuous poor posture'),
+                  trailing: DropdownButton<HapticInterval>(
+                    value: _poorPostureInterval,
+                    underline: const SizedBox(),
+                    items: HapticInterval.values.map((interval) {
+                      return DropdownMenuItem(
+                        value: interval,
+                        child: Text(interval.label),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _poorPostureInterval = value;
+                        });
+                        _saveSettings();
+                      }
+                    },
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
               
               const Divider(height: AppSpacing.xl),
               
@@ -106,6 +224,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   setState(() {
                     _reminderEnabled = value;
                   });
+                  _saveSettings();
                 },
                 contentPadding: EdgeInsets.zero,
               ),
@@ -135,6 +254,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   setState(() {
                     _autoPauseEnabled = value;
                   });
+                  _saveSettings();
                 },
                 contentPadding: EdgeInsets.zero,
               ),
@@ -188,6 +308,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
       setState(() {
         _reminderTime = time;
       });
+      _saveSettings();
     }
   }
 }
