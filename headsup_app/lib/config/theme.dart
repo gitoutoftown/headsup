@@ -27,10 +27,15 @@ class AppColors {
   static const Color success = Color(0xFF34C759);
   static const Color error = Color(0xFFFF3B30);
   
-  // Posture states
-  static const Color postureGood = Color(0xFF34C759);
-  static const Color postureFair = Color(0xFFFF9500);
-  static const Color posturePoor = Color(0xFFFF3B30);
+  // 5-Tier Posture state colors
+  static const Color postureExcellent = Color(0xFF00C853);  // Vibrant green
+  static const Color postureGood = Color(0xFF34C759);       // Standard green
+  static const Color postureOkay = Color(0xFFFFD60A);       // Yellow
+  static const Color postureBad = Color(0xFFFF9500);        // Orange
+  static const Color posturePoor = Color(0xFFFF3B30);       // Red
+  
+  // Legacy aliases
+  static const Color postureFair = postureOkay;
 }
 
 /// Typography styles

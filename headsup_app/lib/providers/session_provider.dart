@@ -17,7 +17,11 @@ class SessionState {
   final bool isTracking;
   final bool isPaused;
   final int elapsedSeconds;
+  final int totalPoints;  // Accumulated points (additive only - never decreases)
+  final int excellentSeconds;
   final int goodSeconds;
+  final int okaySeconds;
+  final int badSeconds;
   final int poorSeconds;
   final double currentAngle;
   final PostureState postureState;
@@ -28,7 +32,11 @@ class SessionState {
     this.isTracking = false,
     this.isPaused = false,
     this.elapsedSeconds = 0,
+    this.totalPoints = 0,
+    this.excellentSeconds = 0,
     this.goodSeconds = 0,
+    this.okaySeconds = 0,
+    this.badSeconds = 0,
     this.poorSeconds = 0,
     this.currentAngle = 0,
     this.postureState = PostureState.good,
@@ -40,7 +48,11 @@ class SessionState {
     bool? isTracking,
     bool? isPaused,
     int? elapsedSeconds,
+    int? totalPoints,
+    int? excellentSeconds,
     int? goodSeconds,
+    int? okaySeconds,
+    int? badSeconds,
     int? poorSeconds,
     double? currentAngle,
     PostureState? postureState,
@@ -51,7 +63,11 @@ class SessionState {
       isTracking: isTracking ?? this.isTracking,
       isPaused: isPaused ?? this.isPaused,
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
+      totalPoints: totalPoints ?? this.totalPoints,
+      excellentSeconds: excellentSeconds ?? this.excellentSeconds,
       goodSeconds: goodSeconds ?? this.goodSeconds,
+      okaySeconds: okaySeconds ?? this.okaySeconds,
+      badSeconds: badSeconds ?? this.badSeconds,
       poorSeconds: poorSeconds ?? this.poorSeconds,
       currentAngle: currentAngle ?? this.currentAngle,
       postureState: postureState ?? this.postureState,
@@ -59,11 +75,18 @@ class SessionState {
     );
   }
   
-  /// Calculate current posture score
-  int get currentScore {
-    final total = goodSeconds + poorSeconds;
-    if (total == 0) return 0;
-    return ((goodSeconds / total) * 100).round().clamp(0, 100);
+  /// Current score is just the total accumulated points
+  /// Points are ONLY added, never subtracted:
+  /// - Excellent: +5/min, Good: +3/min, Okay: +1/min, Bad/Poor: +0/min
+  int get currentScore => totalPoints;
+  
+  /// Calculate a "posture quality" percentage for display
+  /// This shows what % of time was spent in good+ posture
+  int get postureQuality {
+    final goodTotal = excellentSeconds + goodSeconds + okaySeconds;
+    final total = elapsedSeconds;
+    if (total == 0) return 100;
+    return ((goodTotal / total) * 100).round().clamp(0, 100);
   }
   
   /// Format elapsed time as timer display
@@ -97,7 +120,11 @@ class SessionNotifier extends StateNotifier<SessionState> {
       isTracking: true,
       isPaused: false,
       elapsedSeconds: 0,
+      totalPoints: 0,
+      excellentSeconds: 0,
       goodSeconds: 0,
+      okaySeconds: 0,
+      badSeconds: 0,
       poorSeconds: 0,
       angleHistory: [],
     );
@@ -139,13 +166,17 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _angleSubscription?.cancel();
     await _postureService.stopListening();
     
+    // Calculate good posture seconds as excellent + good + okay
+    final goodPostureTotal = state.excellentSeconds + state.goodSeconds + state.okaySeconds;
+    final poorPostureTotal = state.badSeconds + state.poorSeconds;
+    
     final session = state.currentSession?.copyWith(
       endTime: DateTime.now(),
       durationSeconds: state.elapsedSeconds,
-      goodPostureSeconds: state.goodSeconds,
-      poorPostureSeconds: state.poorSeconds,
+      goodPostureSeconds: goodPostureTotal,
+      poorPostureSeconds: poorPostureTotal,
       averageAngle: _calculateAverageAngle(),
-      postureScore: state.currentScore,
+      postureScore: state.postureQuality,  // Store quality % in DB
     );
     
     if (session != null) {
@@ -163,14 +194,40 @@ class SessionNotifier extends StateNotifier<SessionState> {
     return completedSession;
   }
   
-  /// Handle timer tick
+  /// Handle timer tick - award points based on posture state
   void _tick() {
-    final isGoodPosture = _postureService.isGoodPosture();
+    final currentState = state.postureState;
     
+    // For smoother accumulation, add points every minute
+    // But track seconds for each tier
+    final newElapsed = state.elapsedSeconds + 1;
+    
+    // Add points every minute based on average state
+    int newPoints = state.totalPoints;
+    if (newElapsed % 60 == 0) {
+      // At each minute mark, add points based on dominant posture
+      newPoints += currentState.pointsPerMinute;
+    }
+    
+    // Update tier-specific seconds
     state = state.copyWith(
-      elapsedSeconds: state.elapsedSeconds + 1,
-      goodSeconds: isGoodPosture ? state.goodSeconds + 1 : state.goodSeconds,
-      poorSeconds: isGoodPosture ? state.poorSeconds : state.poorSeconds + 1,
+      elapsedSeconds: newElapsed,
+      totalPoints: newPoints,
+      excellentSeconds: currentState == PostureState.excellent 
+          ? state.excellentSeconds + 1 
+          : state.excellentSeconds,
+      goodSeconds: currentState == PostureState.good 
+          ? state.goodSeconds + 1 
+          : state.goodSeconds,
+      okaySeconds: currentState == PostureState.okay 
+          ? state.okaySeconds + 1 
+          : state.okaySeconds,
+      badSeconds: currentState == PostureState.bad 
+          ? state.badSeconds + 1 
+          : state.badSeconds,
+      poorSeconds: currentState == PostureState.poor 
+          ? state.poorSeconds + 1 
+          : state.poorSeconds,
     );
   }
   

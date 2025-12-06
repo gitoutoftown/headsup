@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/theme.dart';
 import '../providers/session_provider.dart';
+import '../utils/constants.dart';
 import '../widgets/character/posture_character.dart';
 import '../widgets/common/widgets.dart';
 import 'session_summary_screen.dart';
@@ -16,6 +17,8 @@ class ActiveSessionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionState = ref.watch(sessionProvider);
+    final currentState = sessionState.postureState;
+    final stateColor = Color(currentState.colorCode);
     
     return Scaffold(
       body: SafeArea(
@@ -31,16 +34,37 @@ class ActiveSessionScreen extends ConsumerWidget {
                 flex: 4,
                 child: Center(
                   child: PostureCharacter(
-                    state: sessionState.postureState,
+                    state: currentState,
                     size: MediaQuery.of(context).size.width * 0.4,
                   ),
                 ),
               ),
               
-              // Angle display
+              // Posture state with color
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: stateColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                child: Text(
+                  currentState.feedback,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: stateColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: AppSpacing.md),
+              
+              // Angle display with tier color
               AngleGauge(
                 angle: sessionState.currentAngle,
-                size: MediaQuery.of(context).size.width * 0.4,
+                size: MediaQuery.of(context).size.width * 0.35,
               ),
               
               const SizedBox(height: AppSpacing.xl),
@@ -55,31 +79,36 @@ class ActiveSessionScreen extends ConsumerWidget {
               
               const SizedBox(height: AppSpacing.lg),
               
-              // Good/Poor progress bar
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: PostureProgressBar(
-                  goodSeconds: sessionState.goodSeconds,
-                  poorSeconds: sessionState.poorSeconds,
-                ),
-              ),
+              // 5-tier progress bar
+              _TierProgressBar(sessionState: sessionState),
               
               const Spacer(),
               
-              // Current score
+              // Points earned (additive - never decreases!)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    '${sessionState.currentScore}',
+                    '+${sessionState.currentScore}',
                     style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                      color: AppColors.primary,
+                      color: stateColor,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'Current Score',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Points',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      Text(
+                        '+${currentState.pointsPerMinute}/min',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: stateColor,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -130,5 +159,130 @@ class ActiveSessionScreen extends ConsumerWidget {
         ),
       );
     }
+  }
+}
+
+/// Progress bar showing time in each tier
+class _TierProgressBar extends StatelessWidget {
+  final SessionState sessionState;
+  
+  const _TierProgressBar({required this.sessionState});
+  
+  @override
+  Widget build(BuildContext context) {
+    final total = sessionState.elapsedSeconds;
+    if (total == 0) {
+      return const SizedBox(height: 12);
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      child: Column(
+        children: [
+          // Stacked bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 12,
+              child: Row(
+                children: [
+                  _TierSegment(
+                    seconds: sessionState.excellentSeconds,
+                    total: total,
+                    color: AppColors.postureExcellent,
+                  ),
+                  _TierSegment(
+                    seconds: sessionState.goodSeconds,
+                    total: total,
+                    color: AppColors.postureGood,
+                  ),
+                  _TierSegment(
+                    seconds: sessionState.okaySeconds,
+                    total: total,
+                    color: AppColors.postureOkay,
+                  ),
+                  _TierSegment(
+                    seconds: sessionState.badSeconds,
+                    total: total,
+                    color: AppColors.postureBad,
+                  ),
+                  _TierSegment(
+                    seconds: sessionState.poorSeconds,
+                    total: total,
+                    color: AppColors.posturePoor,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Legend
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _LegendDot(color: AppColors.postureExcellent, label: 'Excellent'),
+              _LegendDot(color: AppColors.postureGood, label: 'Good'),
+              _LegendDot(color: AppColors.postureOkay, label: 'Okay'),
+              _LegendDot(color: AppColors.postureBad, label: 'Bad'),
+              _LegendDot(color: AppColors.posturePoor, label: 'Poor'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TierSegment extends StatelessWidget {
+  final int seconds;
+  final int total;
+  final Color color;
+  
+  const _TierSegment({
+    required this.seconds,
+    required this.total,
+    required this.color,
+  });
+  
+  @override
+  Widget build(BuildContext context) {
+    final fraction = total > 0 ? seconds / total : 0.0;
+    if (fraction == 0) return const SizedBox.shrink();
+    
+    return Expanded(
+      flex: (fraction * 1000).round(),
+      child: Container(color: color),
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  
+  const _LegendDot({required this.color, required this.label});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
   }
 }

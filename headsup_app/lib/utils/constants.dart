@@ -163,3 +163,23 @@ enum PostureState {
     return this == PostureState.bad || this == PostureState.poor;
   }
 }
+
+// Import-free color codes for PostureState (used with Color class)
+// Usage: Color(postureState.colorCode)
+extension PostureStateColor on PostureState {
+  int get colorCode {
+    switch (this) {
+      case PostureState.excellent:
+        return 0xFF00C853;  // Vibrant green
+      case PostureState.good:
+        return 0xFF34C759;  // Standard green
+      case PostureState.okay:
+        return 0xFFFFD60A;  // Yellow
+      case PostureState.bad:
+        return 0xFFFF9500;  // Orange
+      case PostureState.poor:
+        return 0xFFFF3B30;  // Red
+    }
+  }
+}
+
