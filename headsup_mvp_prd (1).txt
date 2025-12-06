@@ -66,7 +66,12 @@ Unlike reminder-based apps, HeadsUp provides continuous automatic tracking while
 - Leverage HealthKit Workout API for background access
 - Sample gyroscope every 5 seconds during active session
 - Calculate phone angle: degrees from vertical (0° = vertical/perfect, 90° = horizontal/hunched)
-- Define thresholds: Good posture = 0-45°, Poor posture = 46-90°
+- Universal posture zones (same for all users):
+  - Excellent: 0-10°
+  - Good: 11-20°
+  - Okay: 21-40°
+  - Bad: 41-65°
+  - Poor: 66°+
 
 #### 4.1.2 Session Management
 - User manually starts/stops tracking sessions
@@ -77,15 +82,69 @@ Unlike reminder-based apps, HeadsUp provides continuous automatic tracking while
 
 #### 4.1.3 Data Collected Per Session
 - Total duration
-- Time in good posture (0-45°)
-- Time in poor posture (46-90°)
+- Time in each zone:
+  - Excellent minutes (0-10°)
+  - Good minutes (11-20°)
+  - Okay minutes (21-40°)
+  - Bad minutes (41-65°)
+  - Poor minutes (66°+)
+- Points earned:
+  - Excellent: +5 points per minute
+  - Good: +3 points per minute
+  - Okay: +1 point per minute
+  - Bad: 0 points per minute
+  - Poor: 0 points per minute
+- Total points earned (sum of all minute points)
+- Session score: 0-100 (average of per-minute scores)
 - Average angle
-- Posture score: (good time / total time) × 100
 
 #### 4.1.4 Data Collected Per Day
 - Total tracked time
-- Daily posture score (weighted average of all sessions)
+- Total points earned across all sessions
+- Daily score (weighted average of all sessions)
 - Number of sessions completed
+- Zone time breakdown for the day
+
+#### 4.1.5 Point-Based Scoring System
+
+**Core Principle:** Reward excellence, don't punish poor performance
+
+**Points per minute by zone:**
+```
+Excellent (0-10°):   +5 points/minute
+Good (11-20°):       +3 points/minute
+Okay (21-40°):       +1 point/minute
+Bad (41-65°):         0 points/minute
+Poor (66°+):          0 points/minute
+```
+
+**Session Points Calculation:**
+```
+Total Points = (Excellent_minutes × 5) + (Good_minutes × 3) + (Okay_minutes × 1)
+```
+
+**Session Score (0-100):**
+```
+Per-minute score based on zone:
+- Excellent minute: 100 score
+- Good minute: 75 score
+- Okay minute: 40 score
+- Bad minute: 10 score
+- Poor minute: 0 score
+
+Session Score = Average of all per-minute scores
+```
+
+**Display to user:**
+- Primary: Total points earned (gamification, feels rewarding)
+- Secondary: Session score out of 100 (familiar percentage format)
+
+**Benefits:**
+- Incentivizes striving for Excellent over settling for Okay
+- No negative points (zero floor, not punishing)
+- Longer sessions earn more points (encourages tracking)
+- Social features remain fair (everyone on same point system)
+- Natural for gamification (achievements, goals, challenges)
 
 ### 4.2 Visual Character System (Primary Differentiator)
 
@@ -96,20 +155,36 @@ Unlike reminder-based apps, HeadsUp provides continuous automatic tracking while
 - Clean, modern aesthetic (think: Apple's Health app illustrations)
 - No facial features (pure posture visualization)
 
-#### 4.2.2 Character States (3 States Only for MVP)
-**Good (Score 70-100):**
+#### 4.2.2 Character States (5 States for Graduated Feedback)
+
+**Excellent (Score 95-100, Angle 0-10°):**
+- Perfectly straight vertical spine
+- Head directly aligned over shoulders
+- Shoulders level and back
+- Visual: Standing tall, proud posture
+
+**Good (Score 80-94, Angle 11-20°):**
 - Straight vertical spine
 - Head aligned over shoulders
 - Shoulders level
+- Visual: Healthy, normal posture
 
-**Fair (Score 40-69):**
-- Slight spine curve forward
-- Head slightly forward
+**Okay (Score 55-79, Angle 21-40°):**
+- Slight spine curve forward beginning
+- Head slightly forward of shoulders
+- Visual: Acceptable but not optimal
 
-**Poor (Score 0-39):**
+**Bad (Score 25-54, Angle 41-65°):**
+- Noticeable forward spine curve
+- Head clearly forward
+- Shoulders starting to round
+- Visual: Poor posture, concern visible
+
+**Poor (Score 0-24, Angle 66°+):**
 - Pronounced forward spine curve
 - Head significantly forward
 - Shoulders rounded
+- Visual: Severe hunch, clear discomfort
 
 #### 4.2.3 Character Behavior
 - Real-time updates during active session (refreshes every 30 seconds)
@@ -122,15 +197,37 @@ Unlike reminder-based apps, HeadsUp provides continuous automatic tracking while
 - Active session screen: Medium character (real-time state)
 - No widgets for MVP (add later)
 
-### 4.3 Alert System (Minimal)
+### 4.3 Alert System (Graduated, Non-Intrusive)
 
 #### 4.3.1 In-Session Alerts
-- Single alert type: Gentle haptic vibration (light tap pattern)
-- Triggered after: 30 continuous minutes of poor posture
-- Frequency limit: Maximum 1 alert per 30 minutes
+
+**Alert Tiers (Based on Posture Zone):**
+
+**Excellent/Good/Okay zones (0-40°):**
+- No alerts
+- Passive visual feedback only
+- Character shows current state
+- Allow user to self-correct
+
+**Bad zone (41-65°):**
+- Triggered after: 20 continuous minutes in Bad zone
+- Alert type: Gentle haptic vibration (light tap pattern)
+- Visual: Character shows discomfort
+- Frequency limit: Maximum 1 alert per 20 minutes
 - No audio alerts
-- No push notifications during session
-- Visual indicator: Character subtly "shakes" when alert fires
+
+**Poor zone (66°+):**
+- Triggered after: 10 continuous minutes in Poor zone (more urgent)
+- Alert type: Medium haptic vibration
+- Visual: Character shows clear discomfort + subtle shake
+- Frequency limit: Maximum 1 alert per 15 minutes
+- No audio alerts
+
+**General Alert Rules:**
+- No push notifications during session (too disruptive)
+- All alerts are gentle haptics only
+- Visual feedback always present (character state)
+- User can disable alerts entirely in settings
 
 #### 4.3.2 Session Reminders
 - Daily reminder: "Start your HeadsUp session" (user sets time in settings)
@@ -158,24 +255,39 @@ Single-page app with bottom sheet modals for secondary screens.
 - "Pause" text button (subtle)
 
 **Session Summary Screen:**
-- Session posture score (large, centered)
+- Points earned (large number, prominent)
+- Session score out of 100 (secondary)
 - Character's final state
-- Stats in minimal cards: Total time, Good %, Average angle
+- Time breakdown by zone:
+  - Excellent: X min (Y pts)
+  - Good: X min (Y pts)
+  - Okay: X min (Y pts)
+  - Bad: X min (0 pts)
+  - Poor: X min (0 pts)
 - Simple line graph: posture quality over session duration
 - Button: "Done"
 
 **Settings Screen (Bottom sheet):**
-- Posture threshold adjustment (slider: 40-50° cutoff)
-- Good posture angle definition (default 45°)
-- Alert toggle (on/off)
+- Alert settings:
+  - Alert toggle (on/off)
+  - Bad zone alert time (15/20/25 minutes)
+  - Poor zone alert time (5/10/15 minutes)
 - Daily reminder toggle and time picker
-- Auto-pause when phone face-down (toggle)
+- Auto-pause settings:
+  - When phone face-down (toggle)
+  - When charging (toggle)
+- Display preferences:
+  - Show angle numbers (toggle, default off)
+  - Dark mode (system/light/dark)
 - About/Help/Privacy Policy links
 
 **Onboarding (3 Screens):**
 1. Welcome + value proposition
 2. HealthKit permission request + explanation
-3. Calibration tutorial (hold phone at various angles)
+3. Posture education tutorial:
+   - "Hold phone at eye level" → Shows 10-15° angle → "Excellent posture!"
+   - "This is what we're aiming for" → Explains universal zones
+   - Shows character in each state (Excellent through Poor)
 
 #### 4.4.2 Design System
 
@@ -232,7 +344,13 @@ Single-page app with bottom sheet modals for secondary screens.
 1. User downloads and opens app
 2. Welcome screen: "HeadsUp helps you build better posture habits" + "Continue" button
 3. Permission screen: "HeadsUp needs HealthKit access to track continuously while you use other apps. This appears as a 'workout' in your Health app, but it's just posture tracking." + System permission dialog
-4. Calibration screen: "Hold your phone at eye level" → shows angle in real-time → "Perfect! This is good posture (35°)" → "Now look down at your phone" → "This is poor posture (75°). HeadsUp will help you notice this." + "Got it" button
+4. Posture education screen:
+   - "Hold your phone at eye level" → Shows live angle reading
+   - When user achieves 10-15°: "Perfect! This is Excellent posture"
+   - Shows character in Excellent state
+   - "This is what we're aiming for. HeadsUp tracks 5 posture zones:"
+   - Shows all 5 character states with zone labels
+   - "Ready to start tracking?" + "Let's Go" button
 5. Main screen appears
 
 ### 5.2 Primary Flow: Tracking Session
@@ -240,17 +358,22 @@ Single-page app with bottom sheet modals for secondary screens.
 1. User opens app (main screen shows character in neutral state)
 2. User taps "Start Tracking"
 3. System starts HealthKit workout session
-4. Session screen appears: Character animating in real-time, timer running, angle gauge showing current tilt
+4. Session screen appears: Character animating in real-time, timer running, angle gauge showing current tilt, current zone label
 5. User minimizes app, opens Instagram
 6. HeadsUp continues tracking in background
-7. After 40 minutes of hunched scrolling, user feels gentle haptic tap
+7. After 20 minutes of Bad zone posture, user feels gentle haptic tap
 8. User realizes posture is poor, raises phone
-9. Character slowly transitions from "Poor" to "Fair" over next 2 minutes
+9. Character slowly transitions from "Bad" to "Okay" to "Good" over next few minutes
 10. User continues session for 3 more hours (working on laptop, occasional phone checks)
 11. User returns to app, taps "End Session"
-12. Summary screen shows: Score 72, Character in "Fair" state, 4h 15m total, 68% good posture
+12. Summary screen shows:
+    - 847 POINTS earned (large, prominent)
+    - Score: 71/100 (secondary)
+    - Character in "Good" state
+    - Zone breakdown: Excellent 12m (60pts), Good 45m (135pts), Okay 18m (18pts), Bad 3m (0pts)
+    - Line graph showing posture trajectory
 13. User taps "Done"
-14. Returns to home screen, character now shows daily state (updated from session)
+14. Returns to home screen, character reflects daily state, shows daily points total
 
 ### 5.3 Return User Flow (Next Day)
 
@@ -293,13 +416,17 @@ Single-page app with bottom sheet modals for secondary screens.
 #### 6.2.1 Local Database (SQLite via sqflite)
 
 **Sessions Table:**
-- id, start_time, end_time, duration_seconds, good_posture_seconds, poor_posture_seconds, average_angle, posture_score
+- id, start_time, end_time, duration_seconds
+- excellent_seconds, good_seconds, okay_seconds, bad_seconds, poor_seconds
+- total_points, session_score (0-100)
+- average_angle
 
 **Daily_Summaries Table:**
-- date, total_tracked_seconds, daily_posture_score, session_count
+- date, total_tracked_seconds, total_points, daily_score, session_count
+- daily_excellent_seconds, daily_good_seconds, daily_okay_seconds, daily_bad_seconds, daily_poor_seconds
 
 **Settings Table:**
-- key-value pairs for user preferences
+- key-value pairs for user preferences (no calibration data needed)
 
 #### 6.2.2 Data Retention
 - Keep all session data (no automatic deletion)
@@ -368,8 +495,9 @@ Single-page app with bottom sheet modals for secondary screens.
 │         ╱ ╲             │
 │        ╱   ╲            │
 │                         │
-│          72             │ Today's score (48pt bold)
-│      Posture Score      │ (13pt light)
+│         1,240           │ Today's points (48pt bold)
+│        POINTS           │ (13pt light)
+│     Score: 72/100       │ (17pt regular, secondary)
 │                         │
 │     2h 34m tracked      │ (17pt regular)
 │                         │
@@ -415,13 +543,24 @@ Single-page app with bottom sheet modals for secondary screens.
 │         ┃╲              │
 │        ╱  ╲             │
 │                         │
-│          68             │ Session score (48pt)
+│         847             │ Points earned (48pt bold)
+│        POINTS           │ (13pt light)
+│      Score: 71/100      │ (17pt regular, secondary)
 │                         │
 │  ┌─────────────────┐   │
-│  │  3h 42m         │   │ Stats cards
+│  │ Excellent: 12m  │   │ Zone breakdown
+│  │    (60 pts)     │   │
 │  └─────────────────┘   │
 │  ┌─────────────────┐   │
-│  │  72% Good       │   │
+│  │ Good: 45m       │   │
+│  │    (135 pts)    │   │
+│  └─────────────────┘   │
+│  ┌─────────────────┐   │
+│  │ Okay: 18m       │   │
+│  │    (18 pts)     │   │
+│  └─────────────────┘   │
+│  ┌─────────────────┐   │
+│  │ Bad: 3m (0 pts) │   │
 │  └─────────────────┘   │
 │                         │
 │  [Simple line graph]    │ Posture over time
@@ -429,12 +568,25 @@ Single-page app with bottom sheet modals for secondary screens.
 │       [  Done  ]        │
 └─────────────────────────────┘
 ```
-
-### 7.4 Character Visual States
-
-**Good (Straight):**
+│       [  Done  ]        │
+└─────────────────────────────┘
 ```
-    ●          Head: circle
+
+### 7.4 Character Visual States (5-Tier System)
+
+**Excellent (0-10°):**
+```
+    ●          Head: circle, perfectly aligned
+    ┃          Spine: perfectly straight vertical line
+   ╱┃╲         Arms: slight angle from body
+  ╱ ┃ ╲        Shoulders: level, back
+    ┃          Torso: straight
+   ╱ ╲         Legs: confident stance
+```
+
+**Good (11-20°):**
+```
+    ●          Head: circle, aligned
     ┃          Spine: straight vertical line
    ╱┃╲         Arms: slight angle
   ╱ ┃ ╲        Shoulders: level
@@ -442,24 +594,34 @@ Single-page app with bottom sheet modals for secondary screens.
    ╱ ╲         Legs: slight stance
 ```
 
-**Fair (Slight curve):**
+**Okay (21-40°):**
 ```
    ●           Head: slightly forward
-   ┃╲          Spine: gentle forward curve
-  ╱  ╲         
- ╱    ╲        
+   ┃╲          Spine: gentle forward curve beginning
+  ╱  ╲         Arms: normal
+ ╱    ╲        Shoulders: starting to round slightly
    ┃           
   ╱ ╲          
 ```
 
-**Poor (Hunched):**
+**Bad (41-65°):**
 ```
-  ●            Head: significantly forward
-  ┃╲╲          Spine: pronounced curve
- ╱   ╲         Shoulders: rounded
-╱     ╲        
+  ●            Head: noticeably forward
+  ┃╲           Spine: clear forward curve
+ ╱  ╲          Arms: normal
+╱    ╲         Shoulders: rounded
   ┃            
  ╱ ╲           
+```
+
+**Poor (66°+):**
+```
+ ●             Head: significantly forward
+ ┃╲╲           Spine: pronounced curve
+╱   ╲          Arms: normal  
+    ╲          Shoulders: very rounded
+ ┃             Torso: hunched
+╱ ╲            
 ```
 
 ---
@@ -469,17 +631,19 @@ Single-page app with bottom sheet modals for secondary screens.
 ### 8.1 What's IN the MVP
 
 **Must Have:**
-✅ Continuous gyroscope tracking via HealthKit Workout
-✅ Character with 3 visual states (Good/Fair/Poor)
+✅ Continuous gyroscope tracking via HealthKit Workout (CMDeviceMotion)
+✅ Character with 5 visual states (Excellent/Good/Okay/Bad/Poor)
+✅ Universal posture zones (0-10°, 11-20°, 21-40°, 41-65°, 66°+)
+✅ Point-based scoring system (rewards excellence, no negatives)
 ✅ Session management (start/pause/end)
-✅ Basic posture score calculation
-✅ Simple haptic alert after 30min poor posture
-✅ Home screen with character and start button
-✅ Active session screen with real-time feedback
-✅ Session summary screen
+✅ Display points earned + score/100
+✅ Graduated haptic alerts (Bad: 20min, Poor: 10min)
+✅ Home screen with character, points, and start button
+✅ Active session screen with real-time feedback and zone indicator
+✅ Session summary with points breakdown by zone
 ✅ Last 7 days history (simple list)
-✅ Basic settings (threshold, alerts, reminder)
-✅ Onboarding with calibration
+✅ Basic settings (alerts, reminders, auto-pause)
+✅ Onboarding with posture education (no calibration)
 ✅ Dark mode support
 ✅ iPhone only
 
@@ -675,7 +839,7 @@ Single-page app with bottom sheet modals for secondary screens.
 - **Mitigation:** Clear onboarding explanation, FAQ in app
 
 **Risk:** Alerts are too frequent/annoying
-- **Mitigation:** Conservative default (30 min), easy to disable
+- **Mitigation:** Conservative defaults (Bad: 20 min, Poor: 10 min), easy to disable, graduated system (only Bad/Poor zones trigger alerts)
 
 **Risk:** Character feels judgmental instead of helpful
 - **Mitigation:** No negative expressions, neutral design, beta user testing
@@ -703,10 +867,15 @@ Single-page app with bottom sheet modals for secondary screens.
 - [ ] Analytics: None for MVP, or minimal (Firebase Analytics)?
 
 ### 12.3 Product Decisions
-- [ ] Default posture threshold: 45° or 50°?
-- [ ] Alert timing: 30 min or 20 min of poor posture?
-- [ ] Should we show angle number to users, or keep it abstract?
+- [✅] Posture zones: Universal 5-tier system (Excellent 0-10°, Good 11-20°, Okay 21-40°, Bad 41-65°, Poor 66°+)
+- [✅] No personal calibration: All users on same standard for fair social features
+- [✅] Point-based scoring: Excellent +5pts/min, Good +3pts/min, Okay +1pt/min, Bad/Poor 0pts
+- [✅] Display both points (primary) and score/100 (secondary)
+- [ ] Alert timing for Bad zone: 15 min or 20 min?
+- [ ] Alert timing for Poor zone: 10 min or immediate?
+- [ ] Should we show angle number to users, or keep it abstract with zone names only?
 - [ ] Free app with future premium, or free trial model from start?
+- [ ] Character animation: smooth morphing or discrete state transitions?
 
 ---
 

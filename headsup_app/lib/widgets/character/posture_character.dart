@@ -1,5 +1,6 @@
 /// Animated posture character widget
 /// Displays a minimalist line-art figure that reflects posture state
+/// Updated for 5-tier posture system (Excellent/Good/Okay/Bad/Poor)
 library;
 
 import 'package:flutter/material.dart';
@@ -69,26 +70,36 @@ class _CharacterPainter extends CustomPainter {
     final centerX = size.width / 2;
     final headRadius = size.width * 0.08;
     
-    // State-dependent offsets
+    // State-dependent offsets (5 tiers)
     double headForwardOffset;
     double shoulderDrop;
     double spineControlOffset;
     
     switch (state) {
+      case PostureState.excellent:
+        headForwardOffset = 0;
+        shoulderDrop = 0;
+        spineControlOffset = 0;
+        break;
       case PostureState.good:
         headForwardOffset = 0;
         shoulderDrop = 0;
         spineControlOffset = 0;
         break;
-      case PostureState.fair:
-        headForwardOffset = size.width * 0.08;
-        shoulderDrop = size.height * 0.02;
-        spineControlOffset = size.width * 0.05;
+      case PostureState.okay:
+        headForwardOffset = size.width * 0.06;
+        shoulderDrop = size.height * 0.015;
+        spineControlOffset = size.width * 0.04;
+        break;
+      case PostureState.bad:
+        headForwardOffset = size.width * 0.12;
+        shoulderDrop = size.height * 0.035;
+        spineControlOffset = size.width * 0.08;
         break;
       case PostureState.poor:
-        headForwardOffset = size.width * 0.18;
-        shoulderDrop = size.height * 0.05;
-        spineControlOffset = size.width * 0.12;
+        headForwardOffset = size.width * 0.20;
+        shoulderDrop = size.height * 0.06;
+        spineControlOffset = size.width * 0.14;
         break;
     }
     
@@ -121,7 +132,7 @@ class _CharacterPainter extends CustomPainter {
     final spinePath = Path();
     spinePath.moveTo(centerX + spineControlOffset * 0.5, neckY);
     
-    if (state == PostureState.good) {
+    if (state == PostureState.excellent || state == PostureState.good) {
       // Straight spine
       spinePath.lineTo(centerX, hipY);
     } else {
@@ -238,21 +249,27 @@ class _AnimatedPostureCharacterState extends State<AnimatedPostureCharacter>
   
   void _updateAnimations() {
     final targetHeadOffset = switch (_currentState) {
+      PostureState.excellent => 0.0,
       PostureState.good => 0.0,
-      PostureState.fair => 0.08,
-      PostureState.poor => 0.18,
+      PostureState.okay => 0.06,
+      PostureState.bad => 0.12,
+      PostureState.poor => 0.20,
     };
     
     final targetShoulderDrop = switch (_currentState) {
+      PostureState.excellent => 0.0,
       PostureState.good => 0.0,
-      PostureState.fair => 0.02,
-      PostureState.poor => 0.05,
+      PostureState.okay => 0.015,
+      PostureState.bad => 0.035,
+      PostureState.poor => 0.06,
     };
     
     final targetSpineOffset = switch (_currentState) {
+      PostureState.excellent => 0.0,
       PostureState.good => 0.0,
-      PostureState.fair => 0.05,
-      PostureState.poor => 0.12,
+      PostureState.okay => 0.04,
+      PostureState.bad => 0.08,
+      PostureState.poor => 0.14,
     };
     
     _headOffset = Tween<double>(

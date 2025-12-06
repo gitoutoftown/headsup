@@ -2,13 +2,30 @@
 library;
 
 class AppConstants {
-  // Posture thresholds (in degrees)
-  static const double goodPostureMaxAngle = 45.0;
-  static const double poorPostureMinAngle = 46.0;
+  // Posture thresholds (in degrees) - 5-tier system
+  static const double excellentMaxAngle = 10.0;  // 0-10°
+  static const double goodMaxAngle = 20.0;       // 11-20°
+  static const double okayMaxAngle = 40.0;       // 21-40°
+  static const double badMaxAngle = 65.0;        // 41-65°
+  // Poor: 66°+
   
-  // Score thresholds
-  static const int goodScoreMin = 70;
-  static const int fairScoreMin = 40;
+  // Legacy alias for backward compatibility
+  static const double goodPostureMaxAngle = okayMaxAngle;
+  static const double poorPostureMinAngle = badMaxAngle;
+  
+  // Score thresholds (0-100)
+  static const int excellentScoreMin = 95;
+  static const int goodScoreMin = 80;
+  static const int okayScoreMin = 55;
+  static const int badScoreMin = 25;
+  // Poor: 0-24
+  
+  // Points per minute by zone
+  static const int excellentPointsPerMinute = 5;
+  static const int goodPointsPerMinute = 3;
+  static const int okayPointsPerMinute = 1;
+  static const int badPointsPerMinute = 0;
+  static const int poorPointsPerMinute = 0;
   
   // Session limits
   static const int minSessionMinutes = 15;
@@ -19,14 +36,18 @@ class AppConstants {
   static const int autoSaveIntervalSeconds = 60;
   static const int characterUpdateIntervalSeconds = 30;
   
-  // Alerts
-  static const int poorPostureAlertMinutes = 30;
-  static const int alertCooldownMinutes = 30;
+  // Alerts - graduated by zone severity
+  static const int badPostureAlertMinutes = 20;   // After 20 min in Bad zone
+  static const int poorPostureAlertMinutes = 10;  // After 10 min in Poor zone
+  static const int alertCooldownMinutes = 15;
   
   // Auto-pause thresholds
   static const int faceDownMinutes = 2;
   static const int stillMinutes = 10;
   static const int chargingStillMinutes = 5;
+  
+  // Temporal smoothing
+  static const int sustainedPoorPostureSeconds = 5;
   
   // Daily reset
   static const int dailyResetHour = 6;
@@ -36,32 +57,109 @@ class AppConstants {
   static const String appVersion = '1.0.0';
 }
 
-/// Posture state enumeration
+/// Posture state enumeration - 5 tiers
 enum PostureState {
+  excellent,
   good,
-  fair,
+  okay,
+  bad,
   poor;
   
   static PostureState fromScore(int score) {
+    if (score >= AppConstants.excellentScoreMin) return PostureState.excellent;
     if (score >= AppConstants.goodScoreMin) return PostureState.good;
-    if (score >= AppConstants.fairScoreMin) return PostureState.fair;
+    if (score >= AppConstants.okayScoreMin) return PostureState.okay;
+    if (score >= AppConstants.badScoreMin) return PostureState.bad;
     return PostureState.poor;
   }
   
   static PostureState fromAngle(double angle) {
-    if (angle <= AppConstants.goodPostureMaxAngle) return PostureState.good;
-    if (angle <= 60) return PostureState.fair;
+    if (angle <= AppConstants.excellentMaxAngle) return PostureState.excellent;
+    if (angle <= AppConstants.goodMaxAngle) return PostureState.good;
+    if (angle <= AppConstants.okayMaxAngle) return PostureState.okay;
+    if (angle <= AppConstants.badMaxAngle) return PostureState.bad;
     return PostureState.poor;
+  }
+  
+  /// Calculate score based on angle with smooth gradual transitions
+  static int scoreFromAngle(double angle) {
+    if (angle <= 10) {
+      return (95 + (10 - angle) * 0.5).round().clamp(95, 100);
+    } else if (angle <= 20) {
+      return (80 + (20 - angle) * 1.5).round().clamp(80, 94);
+    } else if (angle <= 40) {
+      return (55 + (40 - angle) * 1.25).round().clamp(55, 79);
+    } else if (angle <= 65) {
+      return (25 + (65 - angle) * 1.2).round().clamp(25, 54);
+    } else {
+      return (25 - (angle - 65) * 1.0).round().clamp(0, 24);
+    }
+  }
+  
+  /// Points earned per minute in this state
+  int get pointsPerMinute {
+    switch (this) {
+      case PostureState.excellent:
+        return AppConstants.excellentPointsPerMinute;
+      case PostureState.good:
+        return AppConstants.goodPointsPerMinute;
+      case PostureState.okay:
+        return AppConstants.okayPointsPerMinute;
+      case PostureState.bad:
+        return AppConstants.badPointsPerMinute;
+      case PostureState.poor:
+        return AppConstants.poorPointsPerMinute;
+    }
+  }
+  
+  /// Score value for averaging (per minute)
+  int get scoreValue {
+    switch (this) {
+      case PostureState.excellent:
+        return 100;
+      case PostureState.good:
+        return 75;
+      case PostureState.okay:
+        return 40;
+      case PostureState.bad:
+        return 10;
+      case PostureState.poor:
+        return 0;
+    }
   }
   
   String get displayName {
     switch (this) {
+      case PostureState.excellent:
+        return 'Excellent';
       case PostureState.good:
         return 'Good';
-      case PostureState.fair:
-        return 'Fair';
+      case PostureState.okay:
+        return 'Okay';
+      case PostureState.bad:
+        return 'Bad';
       case PostureState.poor:
         return 'Poor';
     }
+  }
+  
+  String get feedback {
+    switch (this) {
+      case PostureState.excellent:
+        return 'Excellent posture! 🌟';
+      case PostureState.good:
+        return 'Good posture';
+      case PostureState.okay:
+        return 'Okay - try raising phone a bit';
+      case PostureState.bad:
+        return 'Bad posture - please adjust';
+      case PostureState.poor:
+        return 'Poor posture - raise phone now!';
+    }
+  }
+  
+  /// Whether this state should trigger an alert after sustained duration
+  bool get shouldAlert {
+    return this == PostureState.bad || this == PostureState.poor;
   }
 }
