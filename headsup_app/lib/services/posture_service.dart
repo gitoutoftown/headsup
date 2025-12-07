@@ -96,11 +96,11 @@ class PostureService {
     );
   }
   
-  /// Stop listening to sensors
+  /// Stop listening to sensor updates
   Future<void> stopListening() async {
+    await _motionChannel.stopMotionUpdates();
     await _motionSubscription?.cancel();
     _motionSubscription = null;
-    await _motionChannel.stopUpdates();
   }
   
   /// Process motion data from CMDeviceMotion

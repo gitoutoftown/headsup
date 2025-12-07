@@ -3,6 +3,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Color palette
 class AppColors {
@@ -29,7 +30,7 @@ class AppColors {
   
   // 5-Tier Posture state colors
   static const Color postureExcellent = Color(0xFF00C853);  // Vibrant green
-  static const Color postureGood = Color(0xFF34C759);       // Standard green
+  static const Color postureGood = Color(0xFF007AFF);       // Blue
   static const Color postureOkay = Color(0xFFFFD60A);       // Yellow
   static const Color postureBad = Color(0xFFFF9500);        // Orange
   static const Color posturePoor = Color(0xFFFF3B30);       // Red
@@ -274,7 +275,7 @@ class AppTheme {
   );
   
   static TextTheme _buildTextTheme(Color primary, Color secondary) {
-    return TextTheme(
+    final baseTheme = TextTheme(
       displayLarge: AppTypography.heroNumber.copyWith(color: primary),
       displayMedium: AppTypography.scoreDisplay.copyWith(color: primary),
       headlineLarge: AppTypography.title.copyWith(color: primary),
@@ -284,5 +285,7 @@ class AppTheme {
       labelLarge: AppTypography.button.copyWith(color: primary),
       bodySmall: AppTypography.caption.copyWith(color: secondary),
     );
+    
+    return GoogleFonts.interTextTheme(baseTheme);
   }
 }

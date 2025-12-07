@@ -26,6 +26,8 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
         }
         
         switch call.method {
+        case "isSupported":
+            result(true)
         case "startLiveActivity":
             startLiveActivity(call: call, result: result)
         case "updateLiveActivity":
@@ -70,7 +72,9 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
                 pushType: nil
             )
             LiveActivityPlugin.currentActivity = activity
-            result(true)
+            DispatchQueue.main.async {
+                result(true)
+            }
             print("Live Activity started: \(activity.id)")
         } catch {
             result(FlutterError(
@@ -117,7 +121,9 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
         
         Task {
             await activity.update(using: contentState)
-            result(true)
+            DispatchQueue.main.async {
+                result(true)
+            }
         }
     }
     
@@ -135,8 +141,10 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
         Task {
             await activity.end(dismissalPolicy: .immediate)
             LiveActivityPlugin.currentActivity = nil
-            result(true)
-            print("Live Activity ended")
+            DispatchQueue.main.async {
+                result(true)
+                print("Live Activity ended")
+            }
         }
     }
 }

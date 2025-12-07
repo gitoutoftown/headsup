@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import CoreMotion
+import AudioToolbox
 
 /// Flutter plugin for accessing CMDeviceMotion sensor fusion
 public class MotionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
@@ -44,6 +45,11 @@ public class MotionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         case "isDeviceMotionAvailable":
             let available = CMMotionManager().isDeviceMotionAvailable
             result(available)
+            
+        case "vibrate":
+            // kSystemSoundID_Vibrate = 4095
+            AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+            result(true)
             
         default:
             result(FlutterMethodNotImplemented)

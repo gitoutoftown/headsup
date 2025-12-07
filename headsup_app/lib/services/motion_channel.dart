@@ -5,6 +5,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 /// Data from CMDeviceMotion sensor fusion
 class MotionData {
@@ -126,20 +127,29 @@ class MotionChannel {
     }
   }
   
-  /// Stop receiving motion updates
-  Future<void> stopUpdates() async {
+  /// Stop listening to motion updates
+  Future<void> stopMotionUpdates() async {
     try {
-      await _subscription?.cancel();
+      await _subscription?.cancel(); // Keep subscription cancellation
       _subscription = null;
       await _methodChannel.invokeMethod('stopMotionUpdates');
     } catch (e) {
-      // Ignore errors on stop
+      debugPrint('Error stopping motion updates: $e');
+    }
+  }
+
+  /// Trigger device vibration (works in background on iOS)
+  Future<void> vibrate() async {
+    try {
+      await _methodChannel.invokeMethod('vibrate');
+    } catch (e) {
+      debugPrint('Error triggering vibration: $e');
     }
   }
   
   /// Dispose resources
   void dispose() {
-    stopUpdates();
+    stopMotionUpdates();
     _motionController.close();
   }
 }

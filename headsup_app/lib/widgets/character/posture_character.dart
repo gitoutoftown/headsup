@@ -1,14 +1,15 @@
 /// Animated posture character widget
-/// Displays a minimalist line-art figure that reflects posture state
+/// Displays a stylized head figure with expressive face that reflects posture state
 /// Updated for 5-tier posture system (Excellent/Good/Okay/Bad/Poor)
 library;
 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../config/theme.dart';
 import '../../utils/constants.dart';
 
-class PostureCharacter extends StatelessWidget {
+class PostureCharacter extends StatefulWidget {
   final PostureState state;
   final double size;
   final Duration transitionDuration;
@@ -17,42 +18,135 @@ class PostureCharacter extends StatelessWidget {
     super.key,
     this.state = PostureState.good,
     this.size = 200,
-    this.transitionDuration = const Duration(milliseconds: 1000),
+    this.transitionDuration = const Duration(milliseconds: 800),
   });
+
+  @override
+  State<PostureCharacter> createState() => _PostureCharacterState();
+}
+
+class _PostureCharacterState extends State<PostureCharacter> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
   
+  // Animated values
+  late Animation<double> _neckAngle;
+  late Animation<double> _headForward;
+  late Animation<double> _headDrop;
+  late Animation<double> _mouthCurvature; // 1.0 = Smile, 0.0 = Neutral, -1.0 = Frown
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: widget.transitionDuration,
+      vsync: this,
+    );
+
+    // Initialize with current state values
+    final targets = _getTargets(widget.state);
+    _neckAngle = AlwaysStoppedAnimation(targets.angle);
+    _headForward = AlwaysStoppedAnimation(targets.fwd);
+    _headDrop = AlwaysStoppedAnimation(targets.drop);
+    _mouthCurvature = AlwaysStoppedAnimation(targets.mouth);
+  }
+
+  @override
+  void didUpdateWidget(PostureCharacter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state) {
+      _animateToState(widget.state);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  ({double angle, double fwd, double drop, double mouth}) _getTargets(PostureState state) {
+    switch (state) {
+      case PostureState.excellent:
+        return (angle: 0.0, fwd: 0.0, drop: 0.0, mouth: 1.0);
+      case PostureState.good:
+        return (angle: 5.0, fwd: 5.0, drop: 2.0, mouth: 0.5);
+      case PostureState.okay:
+        return (angle: 15.0, fwd: 15.0, drop: 5.0, mouth: 0.0);
+      case PostureState.bad:
+        return (angle: 30.0, fwd: 30.0, drop: 12.0, mouth: -0.5);
+      case PostureState.poor:
+        return (angle: 45.0, fwd: 50.0, drop: 25.0, mouth: -1.0);
+    }
+  }
+
+  void _animateToState(PostureState newState) {
+    final targets = _getTargets(newState);
+    
+    // Create new animations starting from current value
+    _neckAngle = Tween<double>(
+      begin: _neckAngle.value,
+      end: targets.angle,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _headForward = Tween<double>(
+      begin: _headForward.value,
+      end: targets.fwd,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _headDrop = Tween<double>(
+      begin: _headDrop.value,
+      end: targets.drop,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _mouthCurvature = Tween<double>(
+      begin: _mouthCurvature.value,
+      end: targets.mouth,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _controller.forward(from: 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = isDark ? AppColors.characterDark : AppColors.characterLight;
     
     return SizedBox(
-      width: size,
-      height: size * 1.5,
-      child: AnimatedSwitcher(
-        duration: transitionDuration,
-        switchInCurve: Curves.easeInOut,
-        switchOutCurve: Curves.easeInOut,
-        child: CustomPaint(
-          key: ValueKey(state),
-          size: Size(size, size * 1.5),
-          painter: _CharacterPainter(
-            state: state,
-            color: color,
-            strokeWidth: size * 0.02,
-          ),
-        ),
+      width: widget.size,
+      height: widget.size,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return CustomPaint(
+            size: Size(widget.size, widget.size),
+            painter: _HeadPainter(
+              neckAngle: _neckAngle.value,
+              headForward: _headForward.value,
+              headDrop: _headDrop.value,
+              mouthCurvature: _mouthCurvature.value,
+              color: color,
+              strokeWidth: widget.size * 0.03,
+            ),
+          );
+        },
       ),
     );
   }
 }
 
-class _CharacterPainter extends CustomPainter {
-  final PostureState state;
+class _HeadPainter extends CustomPainter {
+  final double neckAngle;
+  final double headForward;
+  final double headDrop;
+  final double mouthCurvature;
   final Color color;
   final double strokeWidth;
   
-  _CharacterPainter({
-    required this.state,
+  _HeadPainter({
+    required this.neckAngle,
+    required this.headForward,
+    required this.headDrop,
+    required this.mouthCurvature,
     required this.color,
     required this.strokeWidth,
   });
@@ -66,239 +160,94 @@ class _CharacterPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     
-    // Center point
+    // Base parameters
     final centerX = size.width / 2;
-    final headRadius = size.width * 0.08;
+    final bottomY = size.height * 0.9;
+    final scale = size.width / 100.0;
     
-    // State-dependent offsets (5 tiers)
-    double headForwardOffset;
-    double shoulderDrop;
-    double spineControlOffset;
+    // Convert angle to radians
+    final angleRad = neckAngle * math.pi / 180.0;
     
-    switch (state) {
-      case PostureState.excellent:
-        headForwardOffset = 0;
-        shoulderDrop = 0;
-        spineControlOffset = 0;
-        break;
-      case PostureState.good:
-        headForwardOffset = 0;
-        shoulderDrop = 0;
-        spineControlOffset = 0;
-        break;
-      case PostureState.okay:
-        headForwardOffset = size.width * 0.06;
-        shoulderDrop = size.height * 0.015;
-        spineControlOffset = size.width * 0.04;
-        break;
-      case PostureState.bad:
-        headForwardOffset = size.width * 0.12;
-        shoulderDrop = size.height * 0.035;
-        spineControlOffset = size.width * 0.08;
-        break;
-      case PostureState.poor:
-        headForwardOffset = size.width * 0.20;
-        shoulderDrop = size.height * 0.06;
-        spineControlOffset = size.width * 0.14;
-        break;
-    }
-    
-    // Key positions
-    final headY = size.height * 0.12;
-    final headCenterX = centerX + headForwardOffset;
-    
-    final neckY = headY + headRadius + size.height * 0.02;
-    final shoulderY = neckY + size.height * 0.06 + shoulderDrop;
-    final shoulderWidth = size.width * 0.25;
-    
-    final hipY = size.height * 0.55;
-    final legEndY = size.height * 0.95;
-    final legSpread = size.width * 0.12;
-    
-    // Draw head (circle)
-    canvas.drawCircle(
-      Offset(headCenterX, headY),
-      headRadius,
-      paint,
+    // Draw Shoulder Line (Base)
+    final shoulderPath = Path();
+    shoulderPath.moveTo(centerX - 30 * scale, bottomY);
+    shoulderPath.quadraticBezierTo(
+      centerX, bottomY - 5 * scale, 
+      centerX + 30 * scale, bottomY
     );
+    canvas.drawPath(shoulderPath, paint);
     
-    // Draw neck
+    // Pivot point (Base of neck)
+    final pivotX = centerX;
+    final pivotY = bottomY - 5 * scale;
+    
+    // Neck End Point
+    final neckLength = 25.0 * scale;
+    final neckX = pivotX + (headForward * scale);
+    final neckY = pivotY - neckLength + (headDrop * scale);
+    
+    // Draw Neck
     final neckPath = Path();
-    neckPath.moveTo(headCenterX, headY + headRadius);
-    neckPath.lineTo(centerX + spineControlOffset * 0.5, neckY);
+    neckPath.moveTo(pivotX, pivotY);
+    neckPath.quadraticBezierTo(
+      (pivotX + neckX) / 2, pivotY - 10 * scale,
+      neckX, neckY
+    );
     canvas.drawPath(neckPath, paint);
     
-    // Draw spine (curved for poor posture)
-    final spinePath = Path();
-    spinePath.moveTo(centerX + spineControlOffset * 0.5, neckY);
+    // Transform for Head
+    canvas.save();
+    canvas.translate(neckX, neckY);
+    canvas.rotate(angleRad);
     
-    if (state == PostureState.excellent || state == PostureState.good) {
-      // Straight spine
-      spinePath.lineTo(centerX, hipY);
-    } else {
-      // Curved spine
-      spinePath.quadraticBezierTo(
-        centerX + spineControlOffset,
-        (neckY + hipY) / 2,
-        centerX,
-        hipY,
-      );
-    }
-    canvas.drawPath(spinePath, paint);
+    // Draw Head (Rounded Rectangle / Squircle)
+    final headW = 45.0 * scale;
+    final headH = 50.0 * scale;
+    final headRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(0, -headH / 2), width: headW, height: headH),
+      Radius.circular(15 * scale),
+    );
+    canvas.drawRRect(headRect, paint);
     
-    // Draw shoulders
-    final leftShoulderX = centerX - shoulderWidth;
-    final rightShoulderX = centerX + shoulderWidth;
+    // Draw Face Features
+    // Eyes
+    final eyeY = -headH * 0.55;
+    final eyeX = headW * 0.25;
+    final eyeRadius = 2.5 * scale;
     
-    // Left shoulder and arm
-    canvas.drawLine(
-      Offset(centerX + spineControlOffset * 0.3, shoulderY - size.height * 0.02),
-      Offset(leftShoulderX, shoulderY),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(leftShoulderX, shoulderY),
-      Offset(leftShoulderX - size.width * 0.05, hipY - size.height * 0.08),
-      paint,
-    );
+    // Left Eye
+    canvas.drawCircle(Offset(-eyeX, eyeY), eyeRadius, paint..style = PaintingStyle.fill);
+    // Right Eye
+    canvas.drawCircle(Offset(eyeX, eyeY), eyeRadius, paint..style = PaintingStyle.fill);
     
-    // Right shoulder and arm
-    canvas.drawLine(
-      Offset(centerX + spineControlOffset * 0.3, shoulderY - size.height * 0.02),
-      Offset(rightShoulderX + spineControlOffset * 0.4, shoulderY + shoulderDrop * 0.3),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(rightShoulderX + spineControlOffset * 0.4, shoulderY + shoulderDrop * 0.3),
-      Offset(rightShoulderX + size.width * 0.05, hipY - size.height * 0.08),
-      paint,
-    );
+    // Reset paint style for mouth
+    paint.style = PaintingStyle.stroke;
     
-    // Draw legs
-    // Left leg
-    canvas.drawLine(
-      Offset(centerX, hipY),
-      Offset(centerX - legSpread, legEndY),
-      paint,
-    );
+    // Mouth
+    final mouthY = -headH * 0.3;
+    final mouthW = headW * 0.4;
+    final mouthPath = Path();
+    mouthPath.moveTo(-mouthW/2, mouthY);
     
-    // Right leg
-    canvas.drawLine(
-      Offset(centerX, hipY),
-      Offset(centerX + legSpread, legEndY),
-      paint,
+    // Curvature determines smile vs frown
+    // Max curve depth = 5 units
+    final curveDepth = 8.0 * scale * mouthCurvature;
+    
+    mouthPath.quadraticBezierTo(
+      0, mouthY + curveDepth,
+      mouthW/2, mouthY
     );
+    canvas.drawPath(mouthPath, paint);
+    
+    canvas.restore();
   }
   
   @override
-  bool shouldRepaint(covariant _CharacterPainter oldDelegate) {
-    return oldDelegate.state != state || 
-           oldDelegate.color != color ||
-           oldDelegate.strokeWidth != strokeWidth;
-  }
-}
-
-/// Animated character that transitions smoothly between states
-class AnimatedPostureCharacter extends StatefulWidget {
-  final PostureState state;
-  final double size;
-  
-  const AnimatedPostureCharacter({
-    super.key,
-    this.state = PostureState.good,
-    this.size = 200,
-  });
-  
-  @override
-  State<AnimatedPostureCharacter> createState() => _AnimatedPostureCharacterState();
-}
-
-class _AnimatedPostureCharacterState extends State<AnimatedPostureCharacter>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _headOffset;
-  late Animation<double> _shoulderDrop;
-  late Animation<double> _spineOffset;
-  
-  PostureState _currentState = PostureState.good;
-  
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: AppAnimations.characterTransition,
-      vsync: this,
-    );
-    _currentState = widget.state;
-    _updateAnimations();
-  }
-  
-  @override
-  void didUpdateWidget(AnimatedPostureCharacter oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.state != widget.state) {
-      _animateToState(widget.state);
-    }
-  }
-  
-  void _animateToState(PostureState newState) {
-    _currentState = newState;
-    _updateAnimations();
-    _controller.forward(from: 0);
-  }
-  
-  void _updateAnimations() {
-    final targetHeadOffset = switch (_currentState) {
-      PostureState.excellent => 0.0,
-      PostureState.good => 0.0,
-      PostureState.okay => 0.06,
-      PostureState.bad => 0.12,
-      PostureState.poor => 0.20,
-    };
-    
-    final targetShoulderDrop = switch (_currentState) {
-      PostureState.excellent => 0.0,
-      PostureState.good => 0.0,
-      PostureState.okay => 0.015,
-      PostureState.bad => 0.035,
-      PostureState.poor => 0.06,
-    };
-    
-    final targetSpineOffset = switch (_currentState) {
-      PostureState.excellent => 0.0,
-      PostureState.good => 0.0,
-      PostureState.okay => 0.04,
-      PostureState.bad => 0.08,
-      PostureState.poor => 0.14,
-    };
-    
-    _headOffset = Tween<double>(
-      begin: _headOffset.value,
-      end: targetHeadOffset,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-    
-    _shoulderDrop = Tween<double>(
-      begin: _shoulderDrop.value,
-      end: targetShoulderDrop,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-    
-    _spineOffset = Tween<double>(
-      begin: _spineOffset.value,
-      end: targetSpineOffset,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-  
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    return PostureCharacter(
-      state: widget.state,
-      size: widget.size,
-    );
+  bool shouldRepaint(covariant _HeadPainter old) {
+    return old.neckAngle != neckAngle ||
+           old.headForward != headForward ||
+           old.headDrop != headDrop ||
+           old.mouthCurvature != mouthCurvature ||
+           old.color != color;
   }
 }

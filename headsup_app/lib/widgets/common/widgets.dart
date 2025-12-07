@@ -1,7 +1,8 @@
 /// Reusable UI components
 library;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Theme, ThemeData;
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../config/theme.dart';
 
@@ -25,22 +26,22 @@ class PrimaryButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       height: 56,
-      child: ElevatedButton(
+      child: ShadButton(
         onPressed: isLoading ? null : onPressed,
         child: isLoading
-            ? const SizedBox(
-                width: 24,
-                height: 24,
+            ? SizedBox(
+                width: 16,
+                height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (icon != null) ...[
-                    Icon(icon, size: 20),
+                    Icon(icon, size: 18),
                     const SizedBox(width: 8),
                   ],
                   Text(text),
@@ -69,13 +70,14 @@ class SecondaryButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       height: 56,
-      child: OutlinedButton(
+      child: ShadButton.outline(
         onPressed: onPressed,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) ...[
-              Icon(icon, size: 20),
+              Icon(icon, size: 18),
               const SizedBox(width: 8),
             ],
             Text(text),
@@ -103,12 +105,12 @@ class StatCard extends StatelessWidget {
   
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme = ShadTheme.of(context);
     
     return Container(
       padding: AppSpacing.cardPadding,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: theme.colorScheme.background,
         borderRadius: AppRadius.cardRadius,
         boxShadow: AppShadows.card,
       ),
@@ -136,12 +138,12 @@ class StatCard extends StatelessWidget {
               children: [
                 Text(
                   value,
-                  style: theme.textTheme.headlineMedium,
+                  style: AppTypography.title,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   label,
-                  style: theme.textTheme.bodySmall,
+                  style: AppTypography.caption,
                 ),
               ],
             ),
@@ -197,13 +199,13 @@ class PostureProgressBar extends StatelessWidget {
           children: [
             Text(
               'Good ${_formatDuration(goodSeconds)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: AppTypography.body.copyWith(
                 color: AppColors.postureGood,
               ),
             ),
             Text(
               'Poor ${_formatDuration(poorSeconds)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: AppTypography.body.copyWith(
                 color: AppColors.posturePoor,
               ),
             ),
@@ -230,41 +232,60 @@ class AngleGauge extends StatelessWidget {
   final double angle;
   final double maxAngle;
   final double size;
+  final Color? color;
   
   const AngleGauge({
     super.key,
     required this.angle,
     this.maxAngle = 90,
     this.size = 120,
+    this.color,
   });
   
   @override
   Widget build(BuildContext context) {
     final normalizedAngle = (angle / maxAngle).clamp(0.0, 1.0);
-    final color = normalizedAngle <= 0.5 
-        ? AppColors.postureGood
-        : normalizedAngle <= 0.7 
-            ? AppColors.postureFair
-            : AppColors.posturePoor;
+    // Use provided color or fallback to Good (Blue)
+    final gaugeColor = color ?? AppColors.postureGood;
     
     return Column(
       children: [
-        Text(
-          '${angle.round()}°',
-          style: Theme.of(context).textTheme.displayMedium?.copyWith(
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 8),
         SizedBox(
           width: size,
-          height: size / 3,
-          child: CustomPaint(
-            painter: _ArcPainter(
-              progress: normalizedAngle,
-              color: color,
-              backgroundColor: Theme.of(context).colorScheme.surface,
-            ),
+          height: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Ring
+              CustomPaint(
+                size: Size(size, size),
+                painter: _RingPainter(
+                  progress: normalizedAngle,
+                  color: gaugeColor,
+                  backgroundColor: ShadTheme.of(context).colorScheme.muted,
+                ),
+              ),
+              // Text
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${angle.round()}°',
+                    style: AppTypography.scoreDisplay.copyWith(
+                      color: gaugeColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'TILT',
+                    style: AppTypography.caption.copyWith(
+                      color: AppTypography.caption.color,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ],
@@ -272,12 +293,12 @@ class AngleGauge extends StatelessWidget {
   }
 }
 
-class _ArcPainter extends CustomPainter {
+class _RingPainter extends CustomPainter {
   final double progress;
   final Color color;
   final Color backgroundColor;
   
-  _ArcPainter({
+  _RingPainter({
     required this.progress,
     required this.color,
     required this.backgroundColor,
@@ -285,24 +306,39 @@ class _ArcPainter extends CustomPainter {
   
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    final strokeWidth = size.width * 0.12;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    
+    final bgPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..color = backgroundColor.withValues(alpha: 0.3);
+      
+    final fgPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..color = color;
+      
+    // Draw background circle
+    canvas.drawCircle(center, radius, bgPaint);
     
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height * 2);
-    
-    // Background arc
-    paint.color = backgroundColor;
-    canvas.drawArc(rect, 3.14159, 3.14159, false, paint);
-    
-    // Progress arc
-    paint.color = color;
-    canvas.drawArc(rect, 3.14159, 3.14159 * progress, false, paint);
+    // Draw progress arc (start from top -90 degrees)
+    // We map 0-90 degrees of tilt to 0-100% of the circle? 
+    // Or maybe just a portion? Let's do full circle for 0-90.
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -1.5708, // -90 degrees (top)
+      2 * 3.14159 * progress, // Full circle sweep
+      false,
+      fgPaint,
+    );
   }
   
   @override
-  bool shouldRepaint(covariant _ArcPainter oldDelegate) {
+  bool shouldRepaint(covariant _RingPainter oldDelegate) {
     return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }

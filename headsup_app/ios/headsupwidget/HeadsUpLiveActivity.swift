@@ -1,11 +1,19 @@
 import ActivityKit
 import SwiftUI
 import WidgetKit
+import os
+
 // HeadsUpActivityAttributes is defined in HeadsUpActivityAttributes.swift
 
 // Live Activity widget for Dynamic Island
 @main
 struct HeadsUpLiveActivity: Widget {
+    let logger = Logger(subsystem: "com.headsup.headsupApp", category: "LiveActivity")
+
+    init() {
+        logger.info("HeadsUpLiveActivity initialized")
+    }
+
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: HeadsUpActivityAttributes.self) { context in
             // Lock screen / banner UI
@@ -110,7 +118,7 @@ struct HeadsUpLiveActivity: Widget {
     private func stateColor(for state: String) -> Color {
         switch state {
         case "excellent": return Color(red: 0, green: 0.78, blue: 0.33)  // #00C853
-        case "good": return Color(red: 0.20, green: 0.78, blue: 0.35)    // #34C759
+        case "good": return Color(red: 0.0, green: 0.48, blue: 1.0)      // #007AFF (Blue)
         case "okay": return Color(red: 1.0, green: 0.84, blue: 0.04)     // #FFD60A
         case "bad": return Color(red: 1.0, green: 0.58, blue: 0)         // #FF9500
         case "poor": return Color(red: 1.0, green: 0.23, blue: 0.19)     // #FF3B30

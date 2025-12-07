@@ -65,6 +65,7 @@ class ActiveSessionScreen extends ConsumerWidget {
               AngleGauge(
                 angle: sessionState.currentAngle,
                 size: MediaQuery.of(context).size.width * 0.35,
+                color: stateColor,
               ),
               
               const SizedBox(height: AppSpacing.xl),

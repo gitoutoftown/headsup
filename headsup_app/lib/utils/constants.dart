@@ -3,9 +3,9 @@ library;
 
 class AppConstants {
   // Posture thresholds (in degrees) - 5-tier system
-  static const double excellentMaxAngle = 10.0;  // 0-10°
-  static const double goodMaxAngle = 20.0;       // 11-20°
-  static const double okayMaxAngle = 40.0;       // 21-40°
+  static const double excellentMaxAngle = 15.0;  // 0-15°
+  static const double goodMaxAngle = 25.0;       // 16-25°
+  static const double okayMaxAngle = 40.0;       // 26-40°
   static const double badMaxAngle = 65.0;        // 41-65°
   // Poor: 66°+
   
@@ -83,12 +83,12 @@ enum PostureState {
   
   /// Calculate score based on angle with smooth gradual transitions
   static int scoreFromAngle(double angle) {
-    if (angle <= 10) {
-      return (95 + (10 - angle) * 0.5).round().clamp(95, 100);
-    } else if (angle <= 20) {
-      return (80 + (20 - angle) * 1.5).round().clamp(80, 94);
+    if (angle <= 15) {
+      return (95 + (15 - angle) * 0.33).round().clamp(95, 100);
+    } else if (angle <= 25) {
+      return (80 + (25 - angle) * 1.4).round().clamp(80, 94);
     } else if (angle <= 40) {
-      return (55 + (40 - angle) * 1.25).round().clamp(55, 79);
+      return (55 + (40 - angle) * 1.7).round().clamp(55, 79);
     } else if (angle <= 65) {
       return (25 + (65 - angle) * 1.2).round().clamp(25, 54);
     } else {
@@ -172,7 +172,7 @@ extension PostureStateColor on PostureState {
       case PostureState.excellent:
         return 0xFF00C853;  // Vibrant green
       case PostureState.good:
-        return 0xFF34C759;  // Standard green
+        return 0xFF007AFF;  // Blue
       case PostureState.okay:
         return 0xFFFFD60A;  // Yellow
       case PostureState.bad:
@@ -182,4 +182,3 @@ extension PostureStateColor on PostureState {
     }
   }
 }
-

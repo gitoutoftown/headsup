@@ -29,6 +29,24 @@ enum HapticInterval {
   }
 }
 
+/// Haptic feedback pattern options
+enum HapticPattern {
+  single('Single'),
+  double('Double'),
+  triple('Triple'),
+  continuous('Continuous');
+
+  final String label;
+  const HapticPattern(this.label);
+  
+  static HapticPattern fromString(String? value) {
+    return HapticPattern.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => HapticPattern.single,
+    );
+  }
+}
+
 class SettingsSheet extends StatefulWidget {
   const SettingsSheet({super.key});
   
@@ -41,6 +59,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
   bool _alertsEnabled = true;
   HapticInterval _badPostureInterval = HapticInterval.thirtyMinutes;
   HapticInterval _poorPostureInterval = HapticInterval.fifteenMinutes;
+  HapticPattern _hapticPattern = HapticPattern.single;
+  bool _vibrateOnBadPosture = true;
+  bool _vibrateOnPoorPosture = true;
   bool _reminderEnabled = true;
   TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
   bool _autoPauseEnabled = true;
@@ -62,6 +83,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
       _poorPostureInterval = HapticInterval.fromMinutes(
         prefs.getInt('poorPostureIntervalMinutes') ?? 15,
       );
+      _hapticPattern = HapticPattern.fromString(
+        prefs.getString('hapticPattern'),
+      );
+      _vibrateOnBadPosture = prefs.getBool('vibrateOnBadPosture') ?? true;
+      _vibrateOnPoorPosture = prefs.getBool('vibrateOnPoorPosture') ?? true;
       _reminderEnabled = prefs.getBool('reminderEnabled') ?? true;
       _autoPauseEnabled = prefs.getBool('autoPauseEnabled') ?? true;
       
@@ -77,6 +103,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
     await prefs.setBool('alertsEnabled', _alertsEnabled);
     await prefs.setInt('badPostureIntervalMinutes', _badPostureInterval.minutes);
     await prefs.setInt('poorPostureIntervalMinutes', _poorPostureInterval.minutes);
+    await prefs.setString('hapticPattern', _hapticPattern.name);
+    await prefs.setBool('vibrateOnBadPosture', _vibrateOnBadPosture);
+    await prefs.setBool('vibrateOnPoorPosture', _vibrateOnPoorPosture);
     await prefs.setBool('reminderEnabled', _reminderEnabled);
     await prefs.setBool('autoPauseEnabled', _autoPauseEnabled);
     await prefs.setInt('reminderHour', _reminderTime.hour);
@@ -163,53 +192,86 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 const SizedBox(height: AppSpacing.md),
                 
                 // Bad posture (41-65°) interval
-                ListTile(
-                  title: const Text('Bad Posture Alert'),
-                  subtitle: const Text('Alert after continuous bad posture'),
+                _buildSectionTitle('Haptic Feedback'),
+                _buildSettingTile(
+                  context,
+                  title: 'Vibration Pattern',
+                  subtitle: _hapticPattern.label,
+                  trailing: DropdownButton<HapticPattern>(
+                    value: _hapticPattern,
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _hapticPattern = value);
+                        _saveSettings();
+                      }
+                    },
+                    items: HapticPattern.values.map((pattern) {
+                      return DropdownMenuItem(
+                        value: pattern,
+                        child: Text(pattern.label),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                _buildSettingTile(
+                  context,
+                  title: 'Bad Posture Interval',
+                  subtitle: 'Vibrate every ${_badPostureInterval.label} in bad posture',
                   trailing: DropdownButton<HapticInterval>(
                     value: _badPostureInterval,
-                    underline: const SizedBox(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _badPostureInterval = value);
+                        _saveSettings();
+                      }
+                    },
                     items: HapticInterval.values.map((interval) {
                       return DropdownMenuItem(
                         value: interval,
                         child: Text(interval.label),
                       );
                     }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _badPostureInterval = value;
-                        });
-                        _saveSettings();
-                      }
-                    },
                   ),
-                  contentPadding: EdgeInsets.zero,
                 ),
-                
-                // Poor posture (66°+) interval
-                ListTile(
-                  title: const Text('Poor Posture Alert'),
-                  subtitle: const Text('Alert after continuous poor posture'),
+                _buildSwitchTile(
+                  context,
+                  title: 'Vibrate on Bad Posture',
+                  subtitle: 'Instant vibration when entering Bad zone',
+                  value: _vibrateOnBadPosture,
+                  onChanged: (value) {
+                    setState(() => _vibrateOnBadPosture = value);
+                    _saveSettings();
+                  },
+                ),
+                _buildSettingTile(
+                  context,
+                  title: 'Poor Posture Interval',
+                  subtitle: 'Vibrate every ${_poorPostureInterval.label} in poor posture',
                   trailing: DropdownButton<HapticInterval>(
                     value: _poorPostureInterval,
-                    underline: const SizedBox(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _poorPostureInterval = value);
+                        _saveSettings();
+                      }
+                    },
                     items: HapticInterval.values.map((interval) {
                       return DropdownMenuItem(
                         value: interval,
                         child: Text(interval.label),
                       );
                     }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _poorPostureInterval = value;
-                        });
-                        _saveSettings();
-                      }
-                    },
                   ),
-                  contentPadding: EdgeInsets.zero,
+                ),
+                _buildSwitchTile(
+                  context,
+                  title: 'Vibrate on Poor Posture',
+                  subtitle: 'Instant vibration when entering Poor zone',
+                  value: _vibrateOnPoorPosture,
+                  onChanged: (value) {
+                    setState(() => _vibrateOnPoorPosture = value);
+                    _saveSettings();
+                  },
                 ),
               ],
               
@@ -305,6 +367,34 @@ class _SettingsSheetState extends State<SettingsSheet> {
     return Text(
       title,
       style: Theme.of(context).textTheme.headlineMedium,
+    );
+  }
+  
+  Widget _buildSettingTile(BuildContext context, {
+    required String title,
+    required String subtitle,
+    required Widget trailing,
+  }) {
+    return ListTile(
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: trailing,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+  
+  Widget _buildSwitchTile(BuildContext context, {
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile(
+      title: Text(title),
+      subtitle: Text(subtitle),
+      value: value,
+      onChanged: onChanged,
+      contentPadding: EdgeInsets.zero,
     );
   }
   

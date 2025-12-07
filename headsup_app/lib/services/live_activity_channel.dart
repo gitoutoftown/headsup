@@ -8,6 +8,7 @@ class LiveActivityChannel {
   
   static bool _isActive = false;
   static DateTime? _lastUpdate;
+  static const _throttleDuration = Duration(milliseconds: 500);
   
   /// Check if Live Activity is supported (iOS 16.1+)
   static Future<bool> isSupported() async {
@@ -27,6 +28,15 @@ class LiveActivityChannel {
     required int pointsPerMinute,
     required double angle,
   }) async {
+    if (!await isSupported()) return false;
+    
+    // Check throttle
+    final now = DateTime.now();
+    if (_lastUpdate != null && now.difference(_lastUpdate!) < _throttleDuration) {
+      return false;
+    }
+    _lastUpdate = now;
+    
     try {
       final result = await _channel.invokeMethod<bool>('startLiveActivity', {
         'sessionId': sessionId,
@@ -57,11 +67,12 @@ class LiveActivityChannel {
   }) async {
     if (!_isActive) return false;
     
-    // Throttle updates to every 2 seconds
+    // Check throttle
     final now = DateTime.now();
-    if (_lastUpdate != null && now.difference(_lastUpdate!).inSeconds < 2) {
+    if (_lastUpdate != null && now.difference(_lastUpdate!) < _throttleDuration) {
       return true; // Skip this update
     }
+    _lastUpdate = now;
     
     try {
       final result = await _channel.invokeMethod<bool>('updateLiveActivity', {

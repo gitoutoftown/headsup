@@ -4,12 +4,14 @@ library;
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/session.dart';
 import '../models/daily_summary.dart';
 import '../services/supabase_service.dart';
 import '../services/posture_service.dart';
 import '../services/live_activity_channel.dart';
+import '../services/motion_channel.dart';
 import '../utils/constants.dart';
 
 /// Current session state
@@ -106,7 +108,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
   Timer? _timer;
   Timer? _sensorTimer;
   StreamSubscription? _angleSubscription;
-  final PostureService _postureService = PostureService.instance;
+  final _postureService = PostureService.instance;
+  final _motionChannel = MotionChannel.instance;
   
   /// Start a new tracking session
   Future<void> startSession() async {
@@ -158,6 +161,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   /// Pause the current session
   void pauseSession() {
     if (!state.isTracking || state.isPaused) return;
+    _hapticTimer?.cancel();
     state = state.copyWith(isPaused: true);
   }
   
@@ -174,6 +178,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _timer?.cancel();
     _sensorTimer?.cancel();
     _angleSubscription?.cancel();
+    _hapticTimer?.cancel();
     await _postureService.stopListening();
     
     // End Live Activity
@@ -261,11 +266,99 @@ class SessionNotifier extends StateNotifier<SessionState> {
       newHistory.removeAt(0);
     }
     
+    final newPostureState = PostureState.fromAngle(angle);
+    
+    // Check for state change and trigger haptics
+    if (newPostureState != state.postureState) {
+      _handleHapticFeedback(state.postureState, newPostureState);
+    }
+    
     state = state.copyWith(
       currentAngle: angle,
-      postureState: PostureState.fromAngle(angle),
+      postureState: newPostureState,
       angleHistory: newHistory,
     );
+  }
+  
+  Timer? _hapticTimer;
+
+  /// Trigger haptic feedback on state transition
+  Future<void> _handleHapticFeedback(PostureState oldState, PostureState newState) async {
+    // Only trigger if alerts are enabled globally
+    final prefs = await SharedPreferences.getInstance();
+    final alertsEnabled = prefs.getBool('alertsEnabled') ?? true;
+    if (!alertsEnabled) {
+      _hapticTimer?.cancel();
+      return;
+    }
+    
+    // Check specific settings
+    final vibrateOnBad = prefs.getBool('vibrateOnBadPosture') ?? true;
+    final vibrateOnPoor = prefs.getBool('vibrateOnPoorPosture') ?? true;
+    final patternName = prefs.getString('hapticPattern');
+    
+    bool shouldVibrate = false;
+    
+    // Transition to Bad
+    if (newState == PostureState.bad && vibrateOnBad) {
+      if (oldState != PostureState.bad && oldState != PostureState.poor) {
+        shouldVibrate = true;
+      } else if (oldState == PostureState.poor) {
+        // Improving from Poor to Bad - maybe don't vibrate? Or vibrate less?
+        // For now, let's treat it as "still bad" but maybe stop continuous if it was poor?
+        // Actually, if continuous is on, it should keep going if Bad is also enabled.
+      }
+    }
+    
+    // Transition to Poor
+    if (newState == PostureState.poor && vibrateOnPoor) {
+      if (oldState != PostureState.poor) {
+        shouldVibrate = true;
+      }
+    }
+    
+    // Stop continuous timer if we are back to good/okay
+    if (newState == PostureState.excellent || newState == PostureState.good || newState == PostureState.okay) {
+      _hapticTimer?.cancel();
+    } else if (shouldVibrate) {
+      // Start vibration pattern
+      _triggerHapticPattern(patternName);
+    }
+  }
+  
+  void _triggerHapticPattern(String? patternName) {
+    _hapticTimer?.cancel();
+    
+    if (patternName == 'continuous') {
+      // Vibrate immediately, then every 2 seconds
+      _vibrate();
+      _hapticTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+        // Double check if alerts are still enabled
+        final prefs = await SharedPreferences.getInstance();
+        if (prefs.getBool('alertsEnabled') == false) {
+          _hapticTimer?.cancel();
+          return;
+        }
+        _vibrate();
+      });
+    } else if (patternName == 'double') {
+      _vibrate();
+      Future.delayed(const Duration(milliseconds: 300), _vibrate);
+    } else if (patternName == 'triple') {
+      _vibrate();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _vibrate();
+        Future.delayed(const Duration(milliseconds: 300), _vibrate);
+      });
+    } else {
+      // Single (default)
+      _vibrate();
+    }
+  }
+  
+  Future<void> _vibrate() async {
+    // Use MotionChannel for background-capable vibration
+    await _motionChannel.vibrate();
   }
   
   /// Calculate average angle from history
@@ -279,6 +372,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _timer?.cancel();
     _sensorTimer?.cancel();
     _angleSubscription?.cancel();
+    _hapticTimer?.cancel();
     super.dispose();
   }
 }
