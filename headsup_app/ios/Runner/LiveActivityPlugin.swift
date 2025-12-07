@@ -4,7 +4,7 @@ import ActivityKit
 
 @available(iOS 16.1, *)
 class LiveActivityPlugin: NSObject, FlutterPlugin {
-    static var currentActivity: Activity<PostureActivityAttributes>?
+    static var currentActivity: Activity<HeadsUpActivityAttributes>?
     
     static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -53,8 +53,8 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
             return
         }
         
-        let attributes = PostureActivityAttributes(startTime: Date())
-        let contentState = PostureActivityAttributes.ContentState(
+        let attributes = HeadsUpActivityAttributes(startTime: Date())
+        let contentState = HeadsUpActivityAttributes.ContentState(
             sessionId: sessionId,
             elapsedSeconds: 0,
             currentState: currentState,
@@ -64,7 +64,7 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
         )
         
         do {
-            let activity = try Activity<PostureActivityAttributes>.request(
+            let activity = try Activity<HeadsUpActivityAttributes>.request(
                 attributes: attributes,
                 contentState: contentState,
                 pushType: nil
@@ -106,7 +106,7 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
             return
         }
         
-        let contentState = PostureActivityAttributes.ContentState(
+        let contentState = HeadsUpActivityAttributes.ContentState(
             sessionId: activity.contentState.sessionId,
             elapsedSeconds: elapsedSeconds,
             currentState: currentState,

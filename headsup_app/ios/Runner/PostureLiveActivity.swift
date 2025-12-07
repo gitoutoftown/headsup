@@ -2,6 +2,7 @@ import ActivityKit
 import SwiftUI
 
 // Define the attributes for the Live Activity
+@available(iOS 16.1, *)
 struct PostureActivityAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var sessionId: String
@@ -118,6 +119,7 @@ struct PostureLiveActivity: Widget {
 }
 
 // Posture state dot indicator
+@available(iOS 16.1, *)
 struct PostureStateDot: View {
     let state: String
     
@@ -140,6 +142,7 @@ struct PostureStateDot: View {
 }
 
 // Posture state icon
+@available(iOS 16.1, *)
 struct PostureStateIcon: View {
     let state: String
     
@@ -172,9 +175,11 @@ struct PostureStateIcon: View {
     }
 }
 
-// Lock screen view
+// Lock screen view - using typealias to avoid scope issues
+@available(iOS 16.1, *)
 struct PostureLockScreenView: View {
-    let context: ActivityViewContext<PostureActivityAttributes>
+    typealias Context = ActivityViewContext<PostureActivityAttributes>
+    let context: Context
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
