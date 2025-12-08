@@ -19,27 +19,30 @@ class ActiveSessionScreen extends ConsumerWidget {
     final sessionState = ref.watch(sessionProvider);
     final currentState = sessionState.postureState;
     final stateColor = Color(currentState.colorCode);
-    
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
           padding: AppSpacing.pagePadding,
-          child: Column(
+          child: Stack(
             children: [
-              // Top spacer
-              const SizedBox(height: AppSpacing.lg),
-              
-              // Character (40% of screen)
-              Expanded(
-                flex: 4,
-                child: Center(
-                  child: PostureCharacterSvg(
-                    state: currentState,
-                    currentAngle: sessionState.currentAngle,
-                    size: MediaQuery.of(context).size.width * 0.4,
+              // Main content column - layout stays consistent
+              Column(
+                children: [
+                  // Top spacer
+                  const SizedBox(height: AppSpacing.lg),
+
+                  // Character (40% of screen) - stays in same position always
+                  Expanded(
+                    flex: 4,
+                    child: Center(
+                      child: PostureCharacterSvg(
+                        state: currentState,
+                        currentAngle: sessionState.currentAngle,
+                        size: MediaQuery.of(context).size.width * 0.4,
+                      ),
+                    ),
                   ),
-                ),
-              ),
               
               // Posture state with color
               Container(
@@ -142,8 +145,21 @@ class ActiveSessionScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              
-              const SizedBox(height: AppSpacing.lg),
+
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+              ),
+
+              // Pause banner overlaid on top (doesn't affect layout)
+              if (sessionState.isPaused && sessionState.pauseReason != null)
+                Positioned(
+                  top: AppSpacing.lg,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: _PauseReasonBanner(reason: sessionState.pauseReason!),
+                  ),
+                ),
             ],
           ),
         ),
@@ -261,9 +277,9 @@ class _TierSegment extends StatelessWidget {
 class _LegendDot extends StatelessWidget {
   final Color color;
   final String label;
-  
+
   const _LegendDot({required this.color, required this.label});
-  
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -285,6 +301,74 @@ class _LegendDot extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PauseReasonBanner extends StatelessWidget {
+  final PauseReason reason;
+
+  const _PauseReasonBanner({required this.reason});
+
+  @override
+  Widget build(BuildContext context) {
+    final String icon;
+    final String message;
+    final Color color;
+
+    switch (reason) {
+      case PauseReason.phoneCall:
+        icon = '📞';
+        message = 'Paused - Phone call detected';
+        color = Colors.blue;
+        break;
+      case PauseReason.pocket:
+        icon = '👖';
+        message = 'Paused - Phone in pocket';
+        color = Colors.purple;
+        break;
+      case PauseReason.stationary:
+        icon = '⏸️';
+        message = 'Paused - No movement detected';
+        color = Colors.orange;
+        break;
+      case PauseReason.manual:
+        icon = '⏸️';
+        message = 'Paused';
+        color = Colors.grey;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: color.withValues(alpha: 0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            icon,
+            style: const TextStyle(fontSize: 18),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

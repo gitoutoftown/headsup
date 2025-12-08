@@ -34,11 +34,15 @@ class HomeScreen extends ConsumerWidget {
     );
     
     // Determine character state from today's score
-    final characterState = PostureState.fromScore(todayScore);
+    // Default to good posture when no data (score = 0)
+    final characterState = todayScore == 0
+        ? PostureState.good
+        : PostureState.fromScore(todayScore);
 
     // Derive angle from score for static display
-    // Excellent: ~10°, Good: ~20°, Okay: ~30°, Bad: ~50°, Poor: ~70°
-    final displayAngle = todayScore >= 95 ? 10.0 :
+    // Default to good posture (20°) when no data
+    final displayAngle = todayScore == 0 ? 20.0 :
+                        todayScore >= 95 ? 10.0 :
                         todayScore >= 80 ? 20.0 :
                         todayScore >= 55 ? 30.0 :
                         todayScore >= 25 ? 50.0 : 70.0;

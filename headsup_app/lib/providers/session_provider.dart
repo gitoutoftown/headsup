@@ -16,11 +16,20 @@ import '../services/live_activity_channel.dart';
 import '../services/motion_channel.dart';
 import '../utils/constants.dart';
 
+/// Pause reason enumeration
+enum PauseReason {
+  manual,      // User manually paused
+  phoneCall,   // Auto-paused due to phone call
+  pocket,      // Auto-paused due to proximity sensor (pocket mode)
+  stationary,  // Auto-paused due to no movement
+}
+
 /// Current session state
 class SessionState {
   final Session? currentSession;
   final bool isTracking;
   final bool isPaused;
+  final PauseReason? pauseReason;  // Why the session is paused
   final int elapsedSeconds;
   final int totalPoints;  // Accumulated points (additive only - never decreases)
   final int excellentSeconds;
@@ -31,11 +40,12 @@ class SessionState {
   final double currentAngle;
   final PostureState postureState;
   final List<double> angleHistory;
-  
+
   const SessionState({
     this.currentSession,
     this.isTracking = false,
     this.isPaused = false,
+    this.pauseReason,
     this.elapsedSeconds = 0,
     this.totalPoints = 0,
     this.excellentSeconds = 0,
@@ -52,6 +62,8 @@ class SessionState {
     Session? currentSession,
     bool? isTracking,
     bool? isPaused,
+    PauseReason? pauseReason,
+    bool clearPauseReason = false,
     int? elapsedSeconds,
     int? totalPoints,
     int? excellentSeconds,
@@ -67,6 +79,7 @@ class SessionState {
       currentSession: currentSession ?? this.currentSession,
       isTracking: isTracking ?? this.isTracking,
       isPaused: isPaused ?? this.isPaused,
+      pauseReason: clearPauseReason ? null : (pauseReason ?? this.pauseReason),
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       totalPoints: totalPoints ?? this.totalPoints,
       excellentSeconds: excellentSeconds ?? this.excellentSeconds,
@@ -160,7 +173,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
         if (DateTime.now().difference(_lastMovementTime).inSeconds > 30) {
           _pausedByStationary = true;
           print("⚠️ Auto-Pause: Stationary timeout reached (30s)");
-          pauseSession();
+          pauseSession(reason: PauseReason.stationary);
         }
       }
     });
@@ -175,14 +188,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
     
     // Listen to phone state (Auto-pause on call)
     _phoneStateSubscription = PhoneState.stream.listen((event) {
-      if (event.status == PhoneStateStatus.CALL_INCOMING || 
+      if (event.status == PhoneStateStatus.CALL_INCOMING ||
           event.status == PhoneStateStatus.CALL_STARTED) {
         if (!state.isPaused) {
           print("⚠️ Auto-Pause: Phone call detected (${event.status})");
-          pauseSession();
+          pauseSession(reason: PauseReason.phoneCall);
           _pausedByCall = true;
         }
-      } else if (event.status == PhoneStateStatus.CALL_ENDED || 
+      } else if (event.status == PhoneStateStatus.CALL_ENDED ||
                  event.status == PhoneStateStatus.NOTHING) {
         if (_pausedByCall) {
           print("✅ Auto-Resume: Call ended");
@@ -199,7 +212,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       if (isNear) {
         if (!state.isPaused) {
           print("⚠️ Auto-Pause: Proximity detected (Pocket Mode)");
-          pauseSession();
+          pauseSession(reason: PauseReason.pocket);
           _pausedByPocket = true;
         }
       } else {
@@ -222,10 +235,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
   
   /// Pause the current session
-  void pauseSession() {
+  void pauseSession({PauseReason reason = PauseReason.manual}) {
     if (!state.isTracking || state.isPaused) return;
     _hapticTimer?.cancel();
-    state = state.copyWith(isPaused: true);
+    state = state.copyWith(
+      isPaused: true,
+      pauseReason: reason,
+    );
     // Force immediate Live Activity update to show paused state
     LiveActivityChannel.update(
       elapsedSeconds: state.elapsedSeconds,
@@ -240,7 +256,10 @@ class SessionNotifier extends StateNotifier<SessionState> {
   /// Resume the current session
   void resumeSession() {
     if (!state.isTracking || !state.isPaused) return;
-    state = state.copyWith(isPaused: false);
+    state = state.copyWith(
+      isPaused: false,
+      clearPauseReason: true,
+    );
     // Force immediate Live Activity update to remove paused state
     LiveActivityChannel.update(
       elapsedSeconds: state.elapsedSeconds,
@@ -250,7 +269,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       angle: state.currentAngle,
       isPaused: false,
     );
-    
+
     // Re-evaluate haptic feedback upon resume
     // We simulate a transition from 'excellent' to ensure logic triggers if currently in bad/poor
     _handleHapticFeedback(PostureState.excellent, state.postureState);

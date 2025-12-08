@@ -94,7 +94,7 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // Color logic based on zones (same as before)
+    // Color logic based on zones
     Color tintColor;
     if (_displayedAngle <= 10) {
       tintColor = Colors.green;
@@ -133,29 +133,21 @@ class _SvgCharacterPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // SVG ViewBox is 0 0 128 128
-    // We need to scale this to fit our widget size
     final scale = size.width / 128.0;
     
-    // Debug: Force visible color for body to test visibility
-    // If the body appears purple, we know the paths are correct but the color was wrong.
-    final bodyPaint = Paint()
-      ..color = Colors.purple // DEBUG COLOR
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-      
-    final headPaint = Paint()
+    final paint = Paint()
       ..color = color
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
 
-    // --- 1. DRAW STATIC BODY (SVG Paths) ---
-    // Extracted from provided SVG
+    // --- 1. DRAW STATIC BODY ---
+    // This includes the Arms/Phone (Path 2) and Torso/Chair (Path 3)
+    // We EXCLUDE the ellipse (Head) from the static drawing
     
     canvas.save();
-    canvas.scale(scale, scale); // Apply scaling
+    canvas.scale(scale, scale);
     
-    // Path 2 (Arms/Phone area)
-    // <path id="_x32_" d="M120.4,64.1l-27,9.8c-1.4,0.6-3.2-0.3-3.7-1.7l0,0c-0.6-1.4,0.3-3.2,1.7-3.7l27-9.8c1.4-0.6,3.2,0.3,3.7,1.7l0,0 C122.7,62.1,121.9,63.5,120.4,64.1z"/>
+    // Path 2 (Arms/Phone) - EXACT copy from SVG
     final armPath = Path();
     armPath.moveTo(120.4, 64.1);
     armPath.lineTo(93.4, 73.9);
@@ -167,10 +159,9 @@ class _SvgCharacterPainter extends CustomPainter {
     armPath.lineTo(122.1, 60.4);
     armPath.cubicTo(122.7, 62.1, 121.9, 63.5, 120.4, 64.1);
     armPath.close();
-    canvas.drawPath(armPath, bodyPaint);
+    canvas.drawPath(armPath, paint);
     
-    // Path 3 (Torso/Legs/Chair)
-    // <path d="M121,78.8c-2-5.2-7.8-8.1-12.9-6L73.6,85.5L64.7,61c-2.3-9.8-10.4-17.8-21-19.9c-14.1-2.6-25.8,11.1-28.4,25.2L1.9,128h55.8 v-12.3L41,71.6c-0.6-1.4,0.3-3.2,1.7-3.7c1.4-0.6,3.2,0.3,3.7,1.7L58,101.2c0.9,2.6,2.6,4.6,5.2,6c2.3,1.2,4.9,1.2,7.2,0.6L115,91.7 C120.1,89.7,123,84,121,78.8z"/>
+    // Path 3 (Body/Chair) - EXACT copy from SVG
     final bodyPath = Path();
     bodyPath.moveTo(121.0, 78.8);
     bodyPath.cubicTo(119.0, 73.6, 113.2, 70.7, 108.1, 72.8);
@@ -190,66 +181,42 @@ class _SvgCharacterPainter extends CustomPainter {
     bodyPath.lineTo(115.0, 91.7);
     bodyPath.cubicTo(120.1, 89.7, 123.0, 84.0, 121.0, 78.8);
     bodyPath.close();
-    canvas.drawPath(bodyPath, bodyPaint);
+    canvas.drawPath(bodyPath, paint);
+    
+    // --- 1.5. PATCH SHOULDER GAP ---
+    // The original SVG body path has a cutout where the neck was.
+    // We draw a small circle to fill this "socket" so the body looks solid.
+    // Position estimated around (58, 45) based on neck connection point.
+    
+    final patchX = 58.0;
+    final patchY = 45.0;
+    final patchRadius = 12.0; // Large enough to cover the dip
+    
+    canvas.drawCircle(Offset(patchX, patchY), patchRadius, paint);
     
     canvas.restore(); // Done with static body
     
     // --- 2. DRAW DYNAMIC HEAD (Circle) ---
-    // <ellipse id="_x33_" cx="67.5" cy="23" rx="23" ry="23"/>
-    
-    // Original Center: (67.5, 23.0)
-    // Radius: 23.0
+    // Replacing SVG Ellipse <ellipse id="_x33_" cx="67.5" cy="23" rx="23" ry="23"/>
     
     final headRadius = 23.0 * scale;
-    
-    // Calculate movement based on angle
-    // Angle 0 = Upright (original position)
-    // Angle 90 = Forward/Down
-    
-    // Max displacement (Forward/Down)
-    // EXAGGERATED for visibility
-    final maxForward = 45.0 * scale; 
-    final maxDown = 30.0 * scale;
-    
-    // Use bend factor (normalized angle)
-    final bendFactor = (angle / 90.0).clamp(0.0, 1.0);
-    
-    // Apply Spring/Ease curve manually for smoothness
-    // E.g. x^2 ease out
-    final ease = bendFactor; // Already smoothed by controller
-    
-    // Calculate head center
-    // Default SVG center (67.5, 23)
     final originalHeadX = 67.5 * scale;
     final originalHeadY = 23.0 * scale;
     
-    // Dynamic Position
+    // Movement Logic:
+    // Forward (Right) and Down based on angle
+    final bendFactor = (angle / 90.0).clamp(0.0, 1.0);
+    final ease = bendFactor; // Linear for now to match direct tilt feel
+    
+    // Exaggerated movement range to be visible
+    final maxForward = 45.0 * scale; 
+    final maxDown = 30.0 * scale;
+    
     final headX = originalHeadX + (maxForward * ease);
     final headY = originalHeadY + (maxDown * ease);
     
-    // Draw Head
-    canvas.drawCircle(Offset(headX, headY), headRadius, headPaint);
-
-    // DEBUG: Draw small dot at original position to see relative movement
-    // canvas.drawCircle(Offset(originalHeadX, originalHeadY), 2.0 * scale, Paint()..color = Colors.black);
-    
-    // Optional: Draw a "Neck" line connecting torso to head?
-    // The SVG relies on gestalt/proximity.
-    // But we could draw a thick line from (55,45) to center of head.
-    final pivotX = 55.0 * scale;
-    final pivotY = 45.0 * scale;
-    
-    final neckPaint = Paint()
-      ..color = color // Keep neck matching head color
-      ..strokeWidth = 14.0 * scale
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-      
-    canvas.drawLine(
-      Offset(pivotX, pivotY), // Neck base on body
-      Offset(headX, headY + (5 * scale)), // Bottom of head
-      neckPaint
-    );
+    // Draw Head Circle
+    canvas.drawCircle(Offset(headX, headY), headRadius, paint);
   }
   
   @override

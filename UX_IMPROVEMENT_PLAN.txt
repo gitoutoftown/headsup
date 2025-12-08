@@ -1,0 +1,1092 @@
+HeadsUp UX Enhancement Plan
+Apple-Inspired Engagement & Polish
+================================================================================
+
+User Priority: Engagement features (streaks, achievements, goals, celebrations)
+App Status: Pre-launch refinement (App Store ready, needs final polish)
+Inspiration: Fitness, Health, Mindfulness, Screen Time apps
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+HeadsUp has a SOLID FOUNDATION with excellent typography (9/10), haptic
+feedback (9/10), and color system. However, it's missing the engagement loop
+and data insights that make Apple's health apps addictive.
+
+CRITICAL GAPS IDENTIFIED:
+✗ Accessibility: 2/10 - No VoiceOver, semantic labels, emoji as UI text
+✗ Engagement: No streaks, goals, achievements, celebrations
+✗ Data Insights: fl_chart installed but unused - no trends, charts, or
+  progress visualization
+✗ UI Polish: Missing empty states, error states, skeleton loading screens
+✗ Session History: No detailed session history view (only bottom sheet)
+
+STRENGTHS TO PRESERVE:
+✓ Typography: SF Pro-inspired, clear hierarchy
+✓ Haptics: Rich feedback (success, warning, error patterns)
+✓ Live Activities: Excellent Dynamic Island integration
+✓ Auto-pause: Smart phone call/pocket/stationary detection
+
+================================================================================
+PHASE 1: CRITICAL ACCESSIBILITY FIXES
+================================================================================
+Priority: CRITICAL (App Store requirement)
+Effort: 1-2 hours
+Files: All screens + widgets
+
+Why This Matters:
+Apple rejects apps with poor accessibility. Current score: 2/10
+
+IMPLEMENTATION:
+
+1.1 VoiceOver Support for Character Animation
+────────────────────────────────────────────────────────────────────────────────
+File: lib/widgets/character/posture_character_svg.dart:103-133
+
+return Semantics(
+  label: 'Posture character showing ${widget.state.feedback.toLowerCase()}',
+  value: '${_displayedAngle.round()} degrees forward tilt',
+  hint: widget.state == PostureState.excellent
+    ? 'Excellent posture detected'
+    : widget.state == PostureState.poor
+    ? 'Poor posture - sit up straight'
+    : 'Posture is ${widget.state.feedback.toLowerCase()}',
+  child: SizedBox(
+    width: widget.size,
+    height: widget.size,
+    child: Stack(/* existing implementation */),
+  ),
+);
+
+1.2 Replace Emoji with Icons + Semantic Labels
+────────────────────────────────────────────────────────────────────────────────
+File: lib/screens/active_session_screen.dart:299-365
+
+Current uses emoji as UI (📞👖⏸️). Replace with:
+
+class _PauseReasonBanner extends StatelessWidget {
+  final PauseReason reason;
+
+  IconData get _icon {
+    switch (reason) {
+      case PauseReason.phoneCall: return Icons.phone_rounded;
+      case PauseReason.pocket: return Icons.phone_android_rounded;
+      case PauseReason.stationary: return Icons.pause_circle_rounded;
+      case PauseReason.manual: return Icons.pause_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ... existing color/message logic
+
+    return Semantics(
+      label: message,
+      hint: reason == PauseReason.phoneCall
+        ? 'Session paused automatically during phone call'
+        : 'Session paused',
+      liveRegion: true,
+      child: Container(
+        // ... existing styling
+        child: Row(
+          children: [
+            Icon(_icon, color: color, size: 20),  // Replace emoji
+            SizedBox(width: AppSpacing.sm),
+            Text(message, /* existing style */),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+1.3 Buttons with Semantic Hints
+────────────────────────────────────────────────────────────────────────────────
+File: lib/screens/home_screen.dart:110-114
+
+Semantics(
+  button: true,
+  label: 'Start tracking posture session',
+  hint: 'Double tap to begin tracking your posture',
+  child: PrimaryButton(
+    text: 'Start Tracking',
+    icon: Icons.play_arrow_rounded,
+    onPressed: () => _startTracking(context, ref),
+  ),
+)
+
+1.4 Score Display Semantics
+────────────────────────────────────────────────────────────────────────────────
+File: lib/screens/home_screen.dart:88-97
+
+Semantics(
+  label: 'Today\'s posture score',
+  value: '$todayScore out of 100',
+  hint: characterState.feedback,
+  child: Column(
+    children: [
+      Text('$todayScore', /* existing */),
+      Text('Posture Score', /* existing */),
+    ],
+  ),
+)
+
+SUCCESS CRITERIA:
+✓ VoiceOver can navigate entire app
+✓ No emoji used as UI elements
+✓ All interactive elements have semantic labels + hints
+✓ Score/timer/angle values are announced
+
+================================================================================
+PHASE 2: ENGAGEMENT FEATURES (TOP PRIORITY)
+================================================================================
+Priority: HIGH (User's #1 request)
+Effort: 4-6 hours
+Inspiration: Fitness app rings, Mindfulness streaks
+
+2.1 Streak System (Like Mindfulness)
+────────────────────────────────────────────────────────────────────────────────
+New File: lib/models/streak.dart
+
+class Streak {
+  final int currentStreak;        // Current consecutive days
+  final int longestStreak;        // All-time record
+  final DateTime? lastSessionDate;
+  final int totalDays;            // Lifetime days with sessions
+
+  bool get isActive => currentStreak > 0;
+  bool get achievedToday => lastSessionDate?.isToday ?? false;
+}
+
+Add to SessionProvider
+────────────────────────────────────────────────────────────────────────────────
+File: lib/providers/session_provider.dart
+
+// Add method to check if streak continues
+Future<void> _updateStreak() async {
+  final yesterday = DateTime.now().subtract(Duration(days: 1));
+  final yesterdaySessions = await _db.getSessionsForDate(yesterday);
+
+  if (yesterdaySessions.isNotEmpty || state.streak.achievedToday) {
+    // Streak continues
+    state = state.copyWith(
+      streak: state.streak.copyWith(
+        currentStreak: state.streak.currentStreak + 1,
+        longestStreak: max(state.streak.longestStreak,
+                          state.streak.currentStreak + 1),
+      ),
+    );
+  } else {
+    // Streak broken
+    state = state.copyWith(
+      streak: state.streak.copyWith(currentStreak: 1),
+    );
+  }
+}
+
+UI: Streak Widget on Home Screen
+────────────────────────────────────────────────────────────────────────────────
+File: lib/screens/home_screen.dart (below score display)
+
+// After score display, before "tracked today"
+if (currentStreak > 0)
+  _StreakBadge(
+    currentStreak: currentStreak,
+    longestStreak: longestStreak,
+  ),
+
+// New widget
+class _StreakBadge extends StatelessWidget {
+  final int currentStreak;
+  final int longestStreak;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: EdgeInsets.only(top: AppSpacing.md),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.postureExcellent, AppColors.postureGood],
+        ),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.local_fire_department_rounded,
+               color: Colors.white, size: 20),
+          SizedBox(width: 6),
+          Text(
+            '$currentStreak day streak',
+            style: TextStyle(color: Colors.white,
+                           fontWeight: FontWeight.w600),
+          ),
+          if (currentStreak == longestStreak && longestStreak > 3)
+            Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+2.2 Achievements System (Like Fitness Awards)
+────────────────────────────────────────────────────────────────────────────────
+New File: lib/models/achievement.dart
+
+enum AchievementType {
+  firstSession,           // "First Steps"
+  streak7,                // "Week Warrior"
+  streak30,               // "Monthly Master"
+  perfectSession,         // "Perfect Posture" - 100 score
+  marathon,               // "Marathon" - 4+ hour session
+  earlyBird,              // "Early Bird" - Session before 8am
+  nightOwl,               // "Night Owl" - Session after 10pm
+  scoreTotal1000,         // "Rising Star" - 1000 total points
+  scoreTotal10000,        // "Posture Pro" - 10k total points
+  sessions100,            // "Centurion" - 100 sessions
+}
+
+class Achievement {
+  final AchievementType type;
+  final String title;
+  final String description;
+  final IconData icon;
+  final DateTime? unlockedAt;
+  final int progress;      // For progressive achievements
+  final int target;
+
+  bool get isUnlocked => unlockedAt != null;
+  double get progressPercent => (progress / target).clamp(0.0, 1.0);
+}
+
+Check Achievements After Session
+────────────────────────────────────────────────────────────────────────────────
+File: lib/providers/session_provider.dart
+
+Future<SessionModel?> endSession() async {
+  // ... existing session end logic
+
+  // Check for new achievements
+  final newAchievements = await _checkAchievements(savedSession);
+
+  if (newAchievements.isNotEmpty) {
+    _showAchievementCelebration(newAchievements);
+  }
+
+  return savedSession;
+}
+
+Future<List<Achievement>> _checkAchievements(SessionModel session) async {
+  final List<Achievement> newlyUnlocked = [];
+
+  // First session
+  final totalSessions = await _db.getTotalSessionCount();
+  if (totalSessions == 1) {
+    newlyUnlocked.add(Achievement.firstSession);
+  }
+
+  // Perfect session
+  if (session.averagePostureScore >= 100) {
+    newlyUnlocked.add(Achievement.perfectSession);
+  }
+
+  // Marathon
+  if (session.durationSeconds >= 14400) { // 4 hours
+    newlyUnlocked.add(Achievement.marathon);
+  }
+
+  // Streak achievements
+  if (state.streak.currentStreak == 7) {
+    newlyUnlocked.add(Achievement.streak7);
+  }
+  if (state.streak.currentStreak == 30) {
+    newlyUnlocked.add(Achievement.streak30);
+  }
+
+  // Total points milestones
+  final totalPoints = await _db.getTotalPoints();
+  if (totalPoints >= 1000 && totalPoints - session.totalPoints < 1000) {
+    newlyUnlocked.add(Achievement.scoreTotal1000);
+  }
+
+  return newlyUnlocked;
+}
+
+Achievement Celebration Modal
+────────────────────────────────────────────────────────────────────────────────
+New File: lib/widgets/sheets/achievement_sheet.dart
+
+class AchievementCelebrationSheet extends StatelessWidget {
+  final List<Achievement> achievements;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: AppSpacing.pagePadding,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.postureExcellent,
+            AppColors.postureGood,
+          ],
+        ),
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Confetti animation (using flutter_animate)
+            Icon(
+              Icons.emoji_events_rounded,
+              size: 80,
+              color: Colors.amber,
+            ).animate()
+              .scale(duration: 600.ms, curve: Curves.elasticOut)
+              .shimmer(delay: 300.ms, duration: 1000.ms),
+
+            SizedBox(height: AppSpacing.lg),
+
+            Text(
+              'Achievement${achievements.length > 1 ? 's' : ''} Unlocked!',
+              style: AppTypography.display.copyWith(color: Colors.white),
+            ),
+
+            SizedBox(height: AppSpacing.xl),
+
+            ...achievements.map((achievement) =>
+              _AchievementCard(achievement)),
+
+            SizedBox(height: AppSpacing.xl),
+
+            PrimaryButton(
+              text: 'Awesome!',
+              onPressed: () => Navigator.pop(context),
+              backgroundColor: Colors.white,
+              textColor: AppColors.postureExcellent,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+2.3 Daily Goal System (Like Screen Time Goals)
+────────────────────────────────────────────────────────────────────────────────
+Add to SessionProvider State
+
+class SessionState {
+  final int dailyGoalMinutes;     // Default: 60 minutes
+  final int todayMinutes;
+  // ... existing fields
+
+  double get goalProgress =>
+    (todayMinutes / dailyGoalMinutes).clamp(0.0, 1.0);
+  bool get goalAchieved => todayMinutes >= dailyGoalMinutes;
+}
+
+Goal Ring Widget (Like Fitness Rings)
+────────────────────────────────────────────────────────────────────────────────
+New File: lib/widgets/common/goal_ring.dart
+
+class GoalRing extends StatelessWidget {
+  final double progress;  // 0.0 to 1.0+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(size, size),
+      painter: _GoalRingPainter(
+        progress: progress,
+        color: color,
+      ),
+    );
+  }
+}
+
+class _GoalRingPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  _GoalRingPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 8;
+
+    // Background track
+    final trackPaint = Paint()
+      ..color = color.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 12
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawCircle(center, radius, trackPaint);
+
+    // Progress arc
+    final progressPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 12
+      ..strokeCap = StrokeCap.round;
+
+    final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,  // Start at top
+      sweepAngle,
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _GoalRingPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
+  }
+}
+
+Add Goal Ring to Home Screen
+────────────────────────────────────────────────────────────────────────────────
+File: lib/screens/home_screen.dart (replace plain score display)
+
+// Replace lines 88-97 with ring + score
+Stack(
+  alignment: Alignment.center,
+  children: [
+    // Goal ring
+    GoalRing(
+      progress: goalProgress,
+      color: characterState.colorCode,
+      size: 160,
+    ),
+
+    // Score in center
+    Column(
+      children: [
+        Text('$todayScore',
+             style: Theme.of(context).textTheme.displayLarge),
+        SizedBox(height: 4),
+        Text('Posture Score',
+             style: Theme.of(context).textTheme.bodySmall),
+        SizedBox(height: 2),
+        Text(
+          '${todayMinutes}/${dailyGoalMinutes} min',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: goalAchieved ? AppColors.postureExcellent : null,
+          ),
+        ),
+      ],
+    ),
+  ],
+)
+
+2.4 Session End Celebration
+────────────────────────────────────────────────────────────────────────────────
+File: lib/screens/session_summary_screen.dart
+
+Add confetti animation when score > 90:
+
+@override
+Widget build(BuildContext context) {
+  final isGreatSession = widget.session.averagePostureScore >= 90;
+
+  return Scaffold(
+    body: Stack(
+      children: [
+        // Existing summary UI
+        SafeArea(child: /* existing content */),
+
+        // Confetti overlay for great sessions
+        if (isGreatSession)
+          IgnorePointer(
+            child: ConfettiOverlay().animate()
+              .fadeIn(duration: 300.ms)
+              .then(delay: 2000.ms)
+              .fadeOut(duration: 1000.ms),
+          ),
+      ],
+    ),
+  );
+}
+
+SUCCESS CRITERIA:
+✓ Streak badge shows on home screen after 1+ day streak
+✓ Achievements unlock with celebration modal + haptics
+✓ Daily goal ring visualizes progress on home screen
+✓ Confetti animation plays for score ≥ 90
+
+================================================================================
+PHASE 3: DATA INSIGHTS & TRENDS
+================================================================================
+Priority: MEDIUM
+Effort: 3-4 hours
+Leverage: fl_chart (already installed!)
+
+3.1 Weekly Posture Chart
+────────────────────────────────────────────────────────────────────────────────
+New Screen: Session History Detail
+File: lib/screens/history_detail_screen.dart
+
+class HistoryDetailScreen extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final last7Days = ref.watch(last7DaysProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: Text('Weekly Progress')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: AppSpacing.pagePadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 7-day score chart
+              Text('Daily Scores', style: AppTypography.heading),
+              SizedBox(height: AppSpacing.md),
+              _WeeklyScoreChart(sessions: last7Days),
+
+              SizedBox(height: AppSpacing.xl),
+
+              // Time per tier breakdown
+              Text('Posture Breakdown', style: AppTypography.heading),
+              SizedBox(height: AppSpacing.md),
+              _TierPieChart(sessions: last7Days),
+
+              SizedBox(height: AppSpacing.xl),
+
+              // Average angle over time
+              Text('Average Tilt Angle', style: AppTypography.heading),
+              SizedBox(height: AppSpacing.md),
+              _AngleTrendChart(sessions: last7Days),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Weekly Score Bar Chart
+────────────────────────────────────────────────────────────────────────────────
+class _WeeklyScoreChart extends StatelessWidget {
+  final List<DailySummary> sessions;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 200,
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: 100,
+          barGroups: sessions.asMap().entries.map((entry) {
+            final index = entry.key;
+            final summary = entry.value;
+
+            return BarChartGroupData(
+              x: index,
+              barRods: [
+                BarChartRodData(
+                  toY: summary.dailyPostureScore.toDouble(),
+                  color: Color(PostureState.fromScore(
+                    summary.dailyPostureScore).colorCode),
+                  width: 16,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ],
+            );
+          }).toList(),
+          titlesData: FlTitlesData(
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (value, meta) {
+                  final days = ['Mon', 'Tue', 'Wed', 'Thu',
+                               'Fri', 'Sat', 'Sun'];
+                  return Text(days[value.toInt() % 7]);
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(showTitles: true),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Posture Tier Pie Chart
+────────────────────────────────────────────────────────────────────────────────
+class _TierPieChart extends StatelessWidget {
+  final List<DailySummary> sessions;
+
+  @override
+  Widget build(BuildContext context) {
+    // Aggregate tier seconds across all sessions
+    final totalExcellent = sessions.fold(0,
+      (sum, s) => sum + s.excellentSeconds);
+    final totalGood = sessions.fold(0,
+      (sum, s) => sum + s.goodSeconds);
+    final totalOkay = sessions.fold(0,
+      (sum, s) => sum + s.okaySeconds);
+    final totalBad = sessions.fold(0,
+      (sum, s) => sum + s.badSeconds);
+    final totalPoor = sessions.fold(0,
+      (sum, s) => sum + s.poorSeconds);
+
+    final total = totalExcellent + totalGood + totalOkay +
+                  totalBad + totalPoor;
+
+    return SizedBox(
+      height: 200,
+      child: PieChart(
+        PieChartData(
+          sections: [
+            if (totalExcellent > 0)
+              PieChartSectionData(
+                value: totalExcellent.toDouble(),
+                title: '${(totalExcellent / total * 100).round()}%',
+                color: AppColors.postureExcellent,
+                radius: 60,
+              ),
+            if (totalGood > 0)
+              PieChartSectionData(
+                value: totalGood.toDouble(),
+                title: '${(totalGood / total * 100).round()}%',
+                color: AppColors.postureGood,
+                radius: 60,
+              ),
+            if (totalOkay > 0)
+              PieChartSectionData(
+                value: totalOkay.toDouble(),
+                title: '${(totalOkay / total * 100).round()}%',
+                color: AppColors.postureOkay,
+                radius: 60,
+              ),
+            if (totalBad > 0)
+              PieChartSectionData(
+                value: totalBad.toDouble(),
+                title: '${(totalBad / total * 100).round()}%',
+                color: AppColors.postureBad,
+                radius: 60,
+              ),
+            if (totalPoor > 0)
+              PieChartSectionData(
+                value: totalPoor.toDouble(),
+                title: '${(totalPoor / total * 100).round()}%',
+                color: AppColors.posturePoor,
+                radius: 60,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+3.2 Insights Cards (Like Health Trends)
+────────────────────────────────────────────────────────────────────────────────
+class _InsightCard extends StatelessWidget {
+  final String title;
+  final String insight;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 32),
+          SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                )),
+                SizedBox(height: 4),
+                Text(insight,
+                     style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Example insights
+_InsightCard(
+  title: 'Improving Posture',
+  insight: 'Your average score increased 12% this week',
+  icon: Icons.trending_up_rounded,
+  color: AppColors.postureExcellent,
+)
+
+_InsightCard(
+  title: 'Best Time',
+  insight: 'Your posture is best in the morning (avg 87)',
+  icon: Icons.wb_sunny_rounded,
+  color: AppColors.postureGood,
+)
+
+SUCCESS CRITERIA:
+✓ Weekly bar chart shows daily scores with tier colors
+✓ Pie chart shows time distribution across posture tiers
+✓ Insights cards provide actionable feedback
+✓ Tap history icon → navigate to full detail screen
+
+================================================================================
+PHASE 4: UI POLISH & EMPTY STATES
+================================================================================
+Priority: MEDIUM
+Effort: 2-3 hours
+
+4.1 Empty States
+────────────────────────────────────────────────────────────────────────────────
+History Sheet - No Sessions
+File: lib/widgets/sheets/history_sheet.dart
+
+// When sessions.isEmpty
+Center(
+  child: Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Icon(
+        Icons.history_rounded,
+        size: 64,
+        color: Theme.of(context).textTheme.bodySmall?.color?
+               .withOpacity(0.3),
+      ),
+      SizedBox(height: AppSpacing.md),
+      Text(
+        'No Sessions Yet',
+        style: Theme.of(context).textTheme.headlineMedium,
+      ),
+      SizedBox(height: AppSpacing.sm),
+      Text(
+        'Start your first tracking session to see your history',
+        style: Theme.of(context).textTheme.bodySmall,
+        textAlign: TextAlign.center,
+      ),
+    ],
+  ),
+)
+
+4.2 Skeleton Loading States
+────────────────────────────────────────────────────────────────────────────────
+Home Screen While Loading Today's Data
+
+final todaySummary = ref.watch(todaySummaryProvider);
+
+return todaySummary.when(
+  loading: () => _HomeScreenSkeleton(),  // NEW
+  error: (err, stack) => _ErrorState(error: err),  // NEW
+  data: (summary) => /* existing home UI */,
+);
+
+class _HomeScreenSkeleton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Padding(
+          padding: AppSpacing.pagePadding,
+          child: Column(
+            children: [
+              // Top bar
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _ShimmerBox(width: 40, height: 40, radius: 20),
+                  _ShimmerBox(width: 40, height: 40, radius: 20),
+                ],
+              ),
+
+              Spacer(),
+
+              // Character skeleton
+              _ShimmerBox(width: 200, height: 280, radius: 16),
+
+              SizedBox(height: AppSpacing.xl),
+
+              // Score skeleton
+              _ShimmerBox(width: 80, height: 48, radius: 8),
+              SizedBox(height: AppSpacing.md),
+              _ShimmerBox(width: 120, height: 20, radius: 4),
+
+              Spacer(),
+
+              // Button skeleton
+              _ShimmerBox(width: double.infinity, height: 56, radius: 28),
+              SizedBox(height: AppSpacing.lg),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShimmerBox extends StatelessWidget {
+  final double width;
+  final double height;
+  final double radius;
+
+  const _ShimmerBox({required this.width, required this.height,
+                      required this.radius});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Theme.of(context).textTheme.bodySmall?.color?
+               .withOpacity(0.1),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    ).animate(onPlay: (controller) => controller.repeat())
+      .shimmer(duration: 1500.ms,
+               color: Colors.white.withOpacity(0.3));
+  }
+}
+
+4.3 Error States
+────────────────────────────────────────────────────────────────────────────────
+class _ErrorState extends StatelessWidget {
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error_outline_rounded, size: 64, color: Colors.red),
+          SizedBox(height: AppSpacing.md),
+          Text('Something went wrong',
+               style: Theme.of(context).textTheme.headlineMedium),
+          SizedBox(height: AppSpacing.sm),
+          Text(
+            'Please try again later',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          SizedBox(height: AppSpacing.lg),
+          TextButton(
+            onPressed: () => ref.invalidate(todaySummaryProvider),
+            child: Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+4.4 Success Micro-Interactions
+────────────────────────────────────────────────────────────────────────────────
+Goal Completion Haptic + Animation
+File: lib/providers/session_provider.dart
+
+void _checkGoalCompletion() {
+  final wasComplete = _previousMinutes >= state.dailyGoalMinutes;
+  final isNowComplete = state.todayMinutes >= state.dailyGoalMinutes;
+
+  if (!wasComplete && isNowComplete) {
+    // Goal just completed!
+    HapticFeedback.mediumImpact();
+    _showGoalCompletionToast();
+  }
+
+  _previousMinutes = state.todayMinutes;
+}
+
+SUCCESS CRITERIA:
+✓ Empty states for history, achievements
+✓ Skeleton screens while loading
+✓ Error states with retry button
+✓ Goal completion triggers haptic + visual feedback
+
+================================================================================
+PHASE 5: APPLE ECOSYSTEM INTEGRATION
+================================================================================
+Priority: LOW (Future enhancement)
+Effort: 4-6 hours
+
+5.1 Deeper Health App Integration
+────────────────────────────────────────────────────────────────────────────────
+Currently the app only writes session data. Enhance to:
+
+1. Read HealthKit Data: Use existing screen time data to correlate with
+   posture
+2. Export Mindful Minutes: Log good posture sessions as mindful minutes
+3. Stand Hours: Track if user was sitting/standing during session
+
+File: lib/services/health_service.dart
+
+Future<void> exportSessionToHealth(SessionModel session) async {
+  final health = Health();
+
+  // Write mindful minutes (good posture time)
+  final mindfulMinutes = (session.goodSeconds +
+                          session.excellentSeconds) ~/ 60;
+  await health.writeHealthData(
+    value: mindfulMinutes.toDouble(),
+    type: HealthDataType.MINDFULNESS,
+    startTime: session.startTime,
+    endTime: session.endTime,
+  );
+
+  // Write workout (if long session)
+  if (session.durationSeconds >= 1800) {  // 30+ min
+    await health.writeWorkoutData(
+      activityType: HealthWorkoutActivityType.OTHER,
+      start: session.startTime,
+      end: session.endTime,
+      totalEnergyBurned: 0,
+      totalDistance: 0,
+    );
+  }
+}
+
+5.2 Home Screen Widget (Future)
+────────────────────────────────────────────────────────────────────────────────
+Create iOS home screen widget showing:
+- Current streak
+- Today's score
+- Goal progress ring
+
+File: headsup_app/ios/HeadsUpWidget/HeadsUpWidget.swift
+
+5.3 Shortcuts Support
+────────────────────────────────────────────────────────────────────────────────
+Allow Siri to start sessions:
+- "Hey Siri, start posture tracking"
+- "Hey Siri, what's my posture score?"
+
+SUCCESS CRITERIA:
+✓ Sessions export as mindful minutes to Health
+✓ Home screen widget shows streak + score
+✓ Siri shortcuts work for starting sessions
+
+================================================================================
+IMPLEMENTATION ROADMAP
+================================================================================
+
+WEEK 1: CRITICAL PATH (MVP FOR APP STORE)
+────────────────────────────────────────────────────────────────────────────────
+Day 1: Phase 1 - Accessibility (MUST HAVE)
+Day 2-3: Phase 2.1-2.2 - Streaks + Achievements
+Day 4: Phase 2.3 - Daily Goals
+Day 5: Phase 4.1-4.2 - Empty/Loading States
+
+WEEK 2: ENGAGEMENT & POLISH
+────────────────────────────────────────────────────────────────────────────────
+Day 1-2: Phase 3.1 - Charts & Trends
+Day 3: Phase 3.2 - Insights
+Day 4: Phase 4.3-4.4 - Error States + Micro-interactions
+Day 5: Bug fixes + testing
+
+FUTURE (POST-LAUNCH)
+────────────────────────────────────────────────────────────────────────────────
+Phase 5: Ecosystem integration (widgets, shortcuts, deeper Health integration)
+
+================================================================================
+KEY FILES TO MODIFY
+================================================================================
+
+HIGH PRIORITY:
+1. lib/widgets/character/posture_character_svg.dart - Add Semantics
+2. lib/screens/active_session_screen.dart - Replace emoji with icons
+3. lib/screens/home_screen.dart - Add streak badge, goal ring
+4. lib/providers/session_provider.dart - Add streak/achievement logic
+5. lib/models/achievement.dart - NEW FILE
+6. lib/models/streak.dart - NEW FILE
+7. lib/widgets/sheets/achievement_sheet.dart - NEW FILE
+
+MEDIUM PRIORITY:
+8. lib/screens/history_detail_screen.dart - NEW FILE (charts)
+9. lib/widgets/common/goal_ring.dart - NEW FILE
+10. lib/widgets/sheets/history_sheet.dart - Add empty state
+
+LOW PRIORITY:
+11. lib/services/health_service.dart - Enhanced Health integration
+12. iOS widget extension - Future work
+
+================================================================================
+SUCCESS METRICS
+================================================================================
+
+After implementation, the app should achieve:
+
+ACCESSIBILITY: 9/10
+✓ Full VoiceOver support
+✓ No emoji as UI
+✓ Semantic labels on all interactive elements
+
+ENGAGEMENT: 9/10
+✓ Streaks visible and celebrated
+✓ Achievement system with 10+ awards
+✓ Daily goal with progress visualization
+✓ Session celebrations for great scores
+
+DATA INSIGHTS: 8/10
+✓ Weekly trend charts
+✓ Posture breakdown visualization
+✓ Smart insights based on data patterns
+
+POLISH: 9/10
+✓ Empty states everywhere
+✓ Skeleton loading screens
+✓ Error handling with retry
+✓ Smooth micro-interactions
+
+FEELS LIKE AN APPLE APP: ✓
+- Design language matches HIG
+- Engagement loop mirrors Fitness/Mindfulness
+- Data presentation similar to Health trends
+- Accessibility meets App Store requirements
+
+================================================================================
+NOTES
+================================================================================
+
+- Preserve existing strengths: Don't touch typography, haptics, Live
+  Activities - these are excellent
+- Use flutter_animate: Already installed, leverage for celebrations
+- Leverage fl_chart: Installed but unused - perfect for trends
+- Keep it simple: Don't over-engineer - Apple's apps are clean and focused
+- Test accessibility: Use VoiceOver BEFORE submitting to App Store
+
+This plan transforms HeadsUp from a functional tracking app into an engaging,
+polished experience worthy of the App Store.
+
+================================================================================
+END OF PLAN
+================================================================================

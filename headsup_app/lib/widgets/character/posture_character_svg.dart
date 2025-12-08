@@ -30,14 +30,14 @@ class _PostureCharacterSvgState extends State<PostureCharacterSvg>
   late AnimationController _controller;
   double _displayedAngle = 0.0;
   double _smoothedSensorAngle = 0.0;
-  static const double _smoothingFactor = 0.15;
+  static const double _smoothingFactor = 0.08;  // Reduced for gentler smoothing
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 800),  // Longer duration for smoother animation
     );
 
     _smoothedSensorAngle = widget.currentAngle;
@@ -64,7 +64,7 @@ class _PostureCharacterSvgState extends State<PostureCharacterSvg>
       end: targetAngle,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.elasticOut,
+      curve: Curves.easeOutCubic,  // Changed from elasticOut for smoother motion
     ));
 
     animation.addListener(() {
@@ -86,27 +86,16 @@ class _PostureCharacterSvgState extends State<PostureCharacterSvg>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Color based on posture state
-    Color tintColor;
-    if (_displayedAngle <= 10) {
-      tintColor = Colors.green;
-    } else if (_displayedAngle <= 20) {
-      tintColor = Colors.blue;
-    } else if (_displayedAngle <= 40) {
-      tintColor = isDark ? Colors.white : Colors.black;
-    } else if (_displayedAngle <= 65) {
-      tintColor = Colors.orange;
-    } else {
-      tintColor = Colors.red;
-    }
+    // Use tier colors from PostureState
+    final tintColor = Color(widget.state.colorCode);
 
     // Calculate bend factor for animation
     final bendFactor = (_displayedAngle / 90.0).clamp(0.0, 1.0);
 
-    // Rotation parameters
-    final headRotationDegrees = bendFactor * 45.0;
-    final forwardShift = bendFactor * 20.0;
-    final downShift = bendFactor * 15.0;
+    // Rotation parameters - more subtle animation
+    final headRotationDegrees = bendFactor * 30.0;  // Reduced from 45°
+    final forwardShift = bendFactor * 12.0;         // Reduced from 20
+    final downShift = bendFactor * 8.0;             // Reduced from 15
 
     // Background color for erasing original head
     final backgroundColor = isDark ? Colors.black : Colors.white;
@@ -181,28 +170,33 @@ class _AnimatedHeadPainter extends CustomPainter {
     final headRadiusY = 23.0;
 
     // Neck base (where neck meets shoulders) - pivot point for rotation
-    final neckBaseX = 67.5; // Use head center X for simpler rotation
-    final neckBaseY = 46.0; // Bottom of head (23 + 23 = 46)
+    // Position at bottom of head for seamless connection
+    final neckBaseX = 67.5; // Head center X
+    final neckBaseY = 46.0; // Bottom of head (no gap)
 
     final headRotationRadians = headRotation * (math.pi / 180.0);
 
     canvas.save();
 
-    // First, hide the original SVG head with a background-colored circle
+    // FIRST: Hide the original SVG head with a background-colored circle
+    // at its FIXED position in the SVG (before any transformations)
     final erasePaint = Paint()
       ..color = backgroundColor
-      ..style = PaintingStyle.fill;
+      ..style = PaintingStyle.fill
+      ..blendMode = BlendMode.src; // Ensure complete coverage
 
+    // Make the erase area large enough to cover the original head
+    // without cutting into the body
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(originalHeadX * scale, originalHeadY * scale),
-        width: (headRadiusX + 3) * 2 * scale,
-        height: (headRadiusY + 3) * 2 * scale,
+        width: (headRadiusX + 8) * 2 * scale,  // Increased from +5 to +8
+        height: (headRadiusY + 8) * 2 * scale,
       ),
       erasePaint,
     );
 
-    // Now draw the animated head
+    // THEN: Apply transformations and draw the animated head
     // Transform to neck base (bottom of head)
     canvas.translate(neckBaseX * scale, neckBaseY * scale);
 
