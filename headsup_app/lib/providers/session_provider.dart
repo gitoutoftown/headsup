@@ -169,6 +169,10 @@ class SessionNotifier extends StateNotifier<SessionState> {
   void resumeSession() {
     if (!state.isTracking || !state.isPaused) return;
     state = state.copyWith(isPaused: false);
+    
+    // Re-evaluate haptic feedback upon resume
+    // We simulate a transition from 'excellent' to ensure logic triggers if currently in bad/poor
+    _handleHapticFeedback(PostureState.excellent, state.postureState);
   }
   
   /// End the current session
@@ -270,7 +274,10 @@ class SessionNotifier extends StateNotifier<SessionState> {
     
     // Check for state change and trigger haptics
     if (newPostureState != state.postureState) {
-      _handleHapticFeedback(state.postureState, newPostureState);
+      // Only trigger haptics if session is active (not paused)
+      if (!state.isPaused) {
+        _handleHapticFeedback(state.postureState, newPostureState);
+      }
     }
     
     state = state.copyWith(

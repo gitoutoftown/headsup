@@ -1,5 +1,5 @@
 /// Animated posture character widget
-/// Displays a stylized head figure with expressive face that reflects posture state
+/// Displays a side-profile silhouette emulating the reference design
 /// Updated for 5-tier posture system (Excellent/Good/Okay/Bad/Poor)
 library;
 
@@ -31,8 +31,7 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
   // Animated values
   late Animation<double> _neckAngle;
   late Animation<double> _headForward;
-  late Animation<double> _headDrop;
-  late Animation<double> _mouthCurvature; // 1.0 = Smile, 0.0 = Neutral, -1.0 = Frown
+  late Animation<double> _strainIntensity; // 0.0 (None) to 1.0 (High)
 
   @override
   void initState() {
@@ -46,8 +45,7 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
     final targets = _getTargets(widget.state);
     _neckAngle = AlwaysStoppedAnimation(targets.angle);
     _headForward = AlwaysStoppedAnimation(targets.fwd);
-    _headDrop = AlwaysStoppedAnimation(targets.drop);
-    _mouthCurvature = AlwaysStoppedAnimation(targets.mouth);
+    _strainIntensity = AlwaysStoppedAnimation(targets.strain);
   }
 
   @override
@@ -64,25 +62,25 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
     super.dispose();
   }
 
-  ({double angle, double fwd, double drop, double mouth}) _getTargets(PostureState state) {
+  ({double angle, double fwd, double strain}) _getTargets(PostureState state) {
+    // Angle in degrees
     switch (state) {
       case PostureState.excellent:
-        return (angle: 0.0, fwd: 0.0, drop: 0.0, mouth: 1.0);
+        return (angle: 0.0, fwd: 0.0, strain: 0.0);
       case PostureState.good:
-        return (angle: 5.0, fwd: 5.0, drop: 2.0, mouth: 0.5);
+        return (angle: 10.0, fwd: 5.0, strain: 0.2);
       case PostureState.okay:
-        return (angle: 15.0, fwd: 15.0, drop: 5.0, mouth: 0.0);
+        return (angle: 25.0, fwd: 15.0, strain: 0.5);
       case PostureState.bad:
-        return (angle: 30.0, fwd: 30.0, drop: 12.0, mouth: -0.5);
+        return (angle: 45.0, fwd: 30.0, strain: 0.8);
       case PostureState.poor:
-        return (angle: 45.0, fwd: 50.0, drop: 25.0, mouth: -1.0);
+        return (angle: 60.0, fwd: 50.0, strain: 1.0);
     }
   }
 
   void _animateToState(PostureState newState) {
     final targets = _getTargets(newState);
     
-    // Create new animations starting from current value
     _neckAngle = Tween<double>(
       begin: _neckAngle.value,
       end: targets.angle,
@@ -93,14 +91,9 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
       end: targets.fwd,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    _headDrop = Tween<double>(
-      begin: _headDrop.value,
-      end: targets.drop,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-    _mouthCurvature = Tween<double>(
-      begin: _mouthCurvature.value,
-      end: targets.mouth,
+    _strainIntensity = Tween<double>(
+      begin: _strainIntensity.value,
+      end: targets.strain,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
     _controller.forward(from: 0);
@@ -111,6 +104,13 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = isDark ? AppColors.characterDark : AppColors.characterLight;
     
+    // Strain color (interpolates from transparent/base to Red/Orange)
+    final strainColor = Color.lerp(
+      color.withValues(alpha: 0.0), 
+      Colors.redAccent, 
+      _strainIntensity.value
+    ) ?? Colors.red;
+
     return SizedBox(
       width: widget.size,
       height: widget.size,
@@ -119,13 +119,13 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
         builder: (context, child) {
           return CustomPaint(
             size: Size(widget.size, widget.size),
-            painter: _HeadPainter(
+            painter: _ProfilePainter(
               neckAngle: _neckAngle.value,
               headForward: _headForward.value,
-              headDrop: _headDrop.value,
-              mouthCurvature: _mouthCurvature.value,
+              strainIntensity: _strainIntensity.value,
               color: color,
-              strokeWidth: widget.size * 0.03,
+              strainColor: strainColor,
+              strokeWidth: widget.size * 0.025,
             ),
           );
         },
@@ -134,20 +134,20 @@ class _PostureCharacterState extends State<PostureCharacter> with SingleTickerPr
   }
 }
 
-class _HeadPainter extends CustomPainter {
+class _ProfilePainter extends CustomPainter {
   final double neckAngle;
   final double headForward;
-  final double headDrop;
-  final double mouthCurvature;
+  final double strainIntensity;
   final Color color;
+  final Color strainColor;
   final double strokeWidth;
   
-  _HeadPainter({
+  _ProfilePainter({
     required this.neckAngle,
     required this.headForward,
-    required this.headDrop,
-    required this.mouthCurvature,
+    required this.strainIntensity,
     required this.color,
+    required this.strainColor,
     required this.strokeWidth,
   });
   
@@ -160,94 +160,116 @@ class _HeadPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     
-    // Base parameters
-    final centerX = size.width / 2;
-    final bottomY = size.height * 0.9;
     final scale = size.width / 100.0;
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
     
-    // Convert angle to radians
-    final angleRad = neckAngle * math.pi / 180.0;
+    // Pivot point (C7 Vertebrae area)
+    final pivotX = centerX + 10 * scale;
+    final pivotY = centerY + 20 * scale;
     
-    // Draw Shoulder Line (Base)
-    final shoulderPath = Path();
-    shoulderPath.moveTo(centerX - 30 * scale, bottomY);
-    shoulderPath.quadraticBezierTo(
-      centerX, bottomY - 5 * scale, 
-      centerX + 30 * scale, bottomY
+    // 1. Draw Static Body/Shoulder (Left side of image)
+    final bodyPath = Path();
+    // Start at bottom left
+    bodyPath.moveTo(centerX - 40 * scale, pivotY + 40 * scale);
+    // Shoulder curve up
+    bodyPath.quadraticBezierTo(
+      centerX - 35 * scale, pivotY + 10 * scale, // Control
+      centerX - 10 * scale, pivotY + 5 * scale   // Top of shoulder near neck
     );
-    canvas.drawPath(shoulderPath, paint);
+    // Neck connection (front)
+    // bodyPath.lineTo(centerX, pivotY); 
+    canvas.drawPath(bodyPath, paint);
     
-    // Pivot point (Base of neck)
-    final pivotX = centerX;
-    final pivotY = bottomY - 5 * scale;
-    
-    // Neck End Point
-    final neckLength = 25.0 * scale;
-    final neckX = pivotX + (headForward * scale);
-    final neckY = pivotY - neckLength + (headDrop * scale);
-    
-    // Draw Neck
-    final neckPath = Path();
-    neckPath.moveTo(pivotX, pivotY);
-    neckPath.quadraticBezierTo(
-      (pivotX + neckX) / 2, pivotY - 10 * scale,
-      neckX, neckY
+    // 2. Draw Back Body (Right side)
+    final backPath = Path();
+    backPath.moveTo(pivotX + 10 * scale, pivotY + 40 * scale);
+    backPath.quadraticBezierTo(
+      pivotX + 15 * scale, pivotY + 20 * scale,
+      pivotX + 5 * scale, pivotY + 5 * scale
     );
-    canvas.drawPath(neckPath, paint);
-    
-    // Transform for Head
+    canvas.drawPath(backPath, paint);
+
+
+    // 3. Draw Head & Neck (Rotated)
     canvas.save();
-    canvas.translate(neckX, neckY);
-    canvas.rotate(angleRad);
+    // Rotate around pivot
+    canvas.translate(pivotX, pivotY);
+    canvas.rotate(neckAngle * math.pi / 180.0);
+    canvas.translate(-pivotX, -pivotY);
     
-    // Draw Head (Rounded Rectangle / Squircle)
-    final headW = 45.0 * scale;
-    final headH = 50.0 * scale;
-    final headRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(0, -headH / 2), width: headW, height: headH),
-      Radius.circular(15 * scale),
+    final headPath = Path();
+    
+    // Neck Base Back (Connects to pivot area)
+    final neckBackX = pivotX;
+    final neckBackY = pivotY;
+    
+    headPath.moveTo(neckBackX, neckBackY);
+    
+    // Back of Head Curve
+    headPath.cubicTo(
+      neckBackX - 5 * scale, neckBackY - 20 * scale, // Neck up
+      neckBackX - 25 * scale, neckBackY - 40 * scale, // Back of skull
+      neckBackX - 25 * scale, neckBackY - 60 * scale  // Top back
     );
-    canvas.drawRRect(headRect, paint);
     
-    // Draw Face Features
-    // Eyes
-    final eyeY = -headH * 0.55;
-    final eyeX = headW * 0.25;
-    final eyeRadius = 2.5 * scale;
-    
-    // Left Eye
-    canvas.drawCircle(Offset(-eyeX, eyeY), eyeRadius, paint..style = PaintingStyle.fill);
-    // Right Eye
-    canvas.drawCircle(Offset(eyeX, eyeY), eyeRadius, paint..style = PaintingStyle.fill);
-    
-    // Reset paint style for mouth
-    paint.style = PaintingStyle.stroke;
-    
-    // Mouth
-    final mouthY = -headH * 0.3;
-    final mouthW = headW * 0.4;
-    final mouthPath = Path();
-    mouthPath.moveTo(-mouthW/2, mouthY);
-    
-    // Curvature determines smile vs frown
-    // Max curve depth = 5 units
-    final curveDepth = 8.0 * scale * mouthCurvature;
-    
-    mouthPath.quadraticBezierTo(
-      0, mouthY + curveDepth,
-      mouthW/2, mouthY
+    // Top of Head
+    headPath.cubicTo(
+      neckBackX - 25 * scale, neckBackY - 80 * scale, // Top dome
+      neckBackX - 60 * scale, neckBackY - 70 * scale, // Forehead start
+      neckBackX - 60 * scale, neckBackY - 45 * scale  // Forehead/Eye level
     );
-    canvas.drawPath(mouthPath, paint);
     
+    // Face Profile
+    // Nose
+    headPath.lineTo(neckBackX - 65 * scale, neckBackY - 40 * scale); // Nose tip
+    headPath.lineTo(neckBackX - 55 * scale, neckBackY - 35 * scale); // Under nose
+    
+    // Chin
+    headPath.quadraticBezierTo(
+      neckBackX - 55 * scale, neckBackY - 25 * scale, // Mouth area
+      neckBackX - 45 * scale, neckBackY - 20 * scale  // Chin tip
+    );
+    
+    // Jaw/Neck Front
+    headPath.quadraticBezierTo(
+      neckBackX - 30 * scale, neckBackY - 15 * scale, // Jawline
+      neckBackX - 20 * scale, neckBackY // Neck front base
+    );
+    
+    canvas.drawPath(headPath, paint);
+    
+    // 4. Draw Strain Pill (Indicator)
+    // Located at the back of the neck pivot
+    if (strainIntensity > 0.1) {
+      final pillPaint = Paint()
+        ..color = Color.lerp(Colors.transparent, Colors.red, strainIntensity) ?? Colors.red
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth * 1.5; // Thicker
+        
+      final pillPath = Path();
+      // An oval shape at the pivot
+      final pillRect = Rect.fromCenter(
+        center: Offset(neckBackX + 5 * scale, neckBackY - 5 * scale),
+        width: 15 * scale,
+        height: 25 * scale
+      );
+      // Rotate pill slightly less than head? Or with head?
+      // Let's draw it relative to the rotated canvas
+      // Actually, typically the strain is between static body and moving head.
+      // So maybe draw it AFTER restore?
+      // Or draw it here on the neck itself.
+      
+      canvas.drawOval(pillRect, pillPaint);
+    }
+
     canvas.restore();
   }
   
   @override
-  bool shouldRepaint(covariant _HeadPainter old) {
+  bool shouldRepaint(covariant _ProfilePainter old) {
     return old.neckAngle != neckAngle ||
-           old.headForward != headForward ||
-           old.headDrop != headDrop ||
-           old.mouthCurvature != mouthCurvature ||
+           old.strainIntensity != strainIntensity ||
            old.color != color;
   }
 }

@@ -5,7 +5,7 @@ class AppConstants {
   // Posture thresholds (in degrees) - 5-tier system
   static const double excellentMaxAngle = 15.0;  // 0-15°
   static const double goodMaxAngle = 25.0;       // 16-25°
-  static const double okayMaxAngle = 40.0;       // 26-40°
+  static const double okayMaxAngle = 35.0;       // 26-35°
   static const double badMaxAngle = 65.0;        // 41-65°
   // Poor: 66°+
   
@@ -87,8 +87,8 @@ enum PostureState {
       return (95 + (15 - angle) * 0.33).round().clamp(95, 100);
     } else if (angle <= 25) {
       return (80 + (25 - angle) * 1.4).round().clamp(80, 94);
-    } else if (angle <= 40) {
-      return (55 + (40 - angle) * 1.7).round().clamp(55, 79);
+    } else if (angle <= 35) {
+      return (55 + (35 - angle) * 2.4).round().clamp(55, 79);
     } else if (angle <= 65) {
       return (25 + (65 - angle) * 1.2).round().clamp(25, 54);
     } else {

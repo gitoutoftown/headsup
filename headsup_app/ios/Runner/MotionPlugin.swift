@@ -1,12 +1,15 @@
 import Flutter
 import UIKit
 import CoreMotion
+import CoreLocation
 import AudioToolbox
 
 /// Flutter plugin for accessing CMDeviceMotion sensor fusion
-public class MotionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
+/// Implements Location Keep-Alive to ensure background execution
+public class MotionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler, CLLocationManagerDelegate {
     
     private var motionManager: CMMotionManager?
+    private var locationManager: CLLocationManager?
     private var eventSink: FlutterEventSink?
     private var updateInterval: TimeInterval = 0.2 // 5 Hz (every 200ms)
     
@@ -71,6 +74,7 @@ public class MotionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     // MARK: - Motion Updates
     
     private func startMotionUpdates() {
+        // 1. Setup Motion Manager
         if motionManager == nil {
             motionManager = CMMotionManager()
         }
@@ -86,6 +90,22 @@ public class MotionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             return
         }
         
+        // 2. Setup Location Manager for Background Keep-Alive
+        if locationManager == nil {
+            locationManager = CLLocationManager()
+            locationManager?.delegate = self
+            locationManager?.desiredAccuracy = kCLLocationAccuracyThreeKilometers // Lowest accuracy to save battery
+            locationManager?.allowsBackgroundLocationUpdates = true
+            locationManager?.pausesLocationUpdatesAutomatically = false
+        }
+        
+        // Request permission if needed
+        locationManager?.requestWhenInUseAuthorization()
+        
+        // Start "Heartbeat" to keep app alive in background
+        locationManager?.startUpdatingLocation()
+        
+        // 3. Start Motion Updates
         manager.deviceMotionUpdateInterval = updateInterval
         
         manager.startDeviceMotionUpdates(
@@ -140,5 +160,17 @@ public class MotionPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     
     private func stopMotionUpdates() {
         motionManager?.stopDeviceMotionUpdates()
+        locationManager?.stopUpdatingLocation()
+    }
+    
+    // MARK: - CLLocationManagerDelegate
+    
+    public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        // We don't actually need the location data, just the background execution time.
+        // Doing nothing here is fine.
+    }
+    
+    public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("Location Manager Error: \(error.localizedDescription)")
     }
 }

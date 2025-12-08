@@ -66,11 +66,26 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
         )
         
         do {
-            let activity = try Activity<HeadsUpActivityAttributes>.request(
-                attributes: attributes,
-                contentState: contentState,
-                pushType: nil
-            )
+            let activity: Activity<HeadsUpActivityAttributes>
+            
+            if #available(iOS 16.2, *) {
+                // Set stale date to 4 seconds from now (buffer for latency)
+                // If app is alive (background or foreground), it updates every second, extending this.
+                // If app dies, this expires shortly.
+                let content = ActivityContent(state: contentState, staleDate: Date().addingTimeInterval(4))
+                activity = try Activity<HeadsUpActivityAttributes>.request(
+                    attributes: attributes,
+                    content: content,
+                    pushType: nil
+                )
+            } else {
+                activity = try Activity<HeadsUpActivityAttributes>.request(
+                    attributes: attributes,
+                    contentState: contentState,
+                    pushType: nil
+                )
+            }
+            
             LiveActivityPlugin.currentActivity = activity
             DispatchQueue.main.async {
                 result(true)
@@ -120,7 +135,13 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
         )
         
         Task {
-            await activity.update(using: contentState)
+            if #available(iOS 16.2, *) {
+                let content = ActivityContent(state: contentState, staleDate: Date().addingTimeInterval(4))
+                await activity.update(content)
+            } else {
+                await activity.update(using: contentState)
+            }
+            
             DispatchQueue.main.async {
                 result(true)
             }

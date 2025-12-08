@@ -14,89 +14,128 @@ struct HeadsUpLiveActivity: Widget {
         logger.info("HeadsUpLiveActivity initialized")
     }
 
+    // Helper to safely check stale state
+    func isActivityStale(_ context: ActivityViewContext<HeadsUpActivityAttributes>) -> Bool {
+        if #available(iOS 16.2, *) {
+            return context.isStale
+        }
+        return false
+    }
+
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: HeadsUpActivityAttributes.self) { context in
             // Lock screen / banner UI
+            let stale = isActivityStale(context)
+            
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Image(systemName: iconName(for: context.state.currentState))
                         .foregroundColor(stateColor(for: context.state.currentState))
-                    Text(stateName(for: context.state.currentState))
+                    Text(stale ? "Session Ended" : stateName(for: context.state.currentState))
                         .font(.headline)
                     Spacer()
-                    Text(formatTime(context.state.elapsedSeconds))
-                        .font(.subheadline.monospacedDigit())
+                    if !stale {
+                        Text(formatTime(context.state.elapsedSeconds))
+                            .font(.subheadline.monospacedDigit())
+                    }
                 }
                 
-                HStack {
-                    Text("Points: +\(context.state.totalPoints)")
-                        .font(.caption)
-                    Spacer()
-                    Text("\(Int(context.state.angle))° tilt")
-                        .font(.caption)
+                if !stale {
+                    HStack {
+                        Text("Points: +\(context.state.totalPoints)")
+                            .font(.caption)
+                        Spacer()
+                        Text("\(Int(context.state.angle))° tilt")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.secondary)
                 }
-                .foregroundColor(.secondary)
             }
             .padding()
+            .opacity(stale ? 0.5 : 1.0)
         } dynamicIsland: { context in
-            DynamicIsland {
+            let stale = isActivityStale(context)
+            
+            return DynamicIsland {
                 // Expanded view (long press)
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: iconName(for: context.state.currentState))
-                        .font(.title2)
-                        .foregroundColor(stateColor(for: context.state.currentState))
+                    if !stale {
+                        Image(systemName: iconName(for: context.state.currentState))
+                            .font(.title2)
+                            .foregroundColor(stateColor(for: context.state.currentState))
+                    }
                 }
                 
                 DynamicIslandExpandedRegion(.trailing) {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("+\(context.state.totalPoints)")
-                            .font(.title2.bold())
-                            .foregroundColor(stateColor(for: context.state.currentState))
-                        Text("+\(context.state.pointsPerMinute)/min")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                    if !stale {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("+\(context.state.totalPoints)")
+                                .font(.title2.bold())
+                                .foregroundColor(stateColor(for: context.state.currentState))
+                            Text("+\(context.state.pointsPerMinute)/min")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 
                 DynamicIslandExpandedRegion(.center) {
                     VStack(spacing: 4) {
-                        Text(stateName(for: context.state.currentState))
-                            .font(.headline)
-                        Text(formatTime(context.state.elapsedSeconds))
-                            .font(.title3.monospacedDigit())
-                            .foregroundColor(.primary)
+                        if stale {
+                            Text("Session Ended")
+                                .font(.headline)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text(stateName(for: context.state.currentState))
+                                .font(.headline)
+                            Text(formatTime(context.state.elapsedSeconds))
+                                .font(.title3.monospacedDigit())
+                                .foregroundColor(.primary)
+                        }
                     }
                 }
                 
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack {
-                        Image(systemName: "figure.stand")
-                            .foregroundColor(.secondary)
-                        Text("\(Int(context.state.angle))° tilt")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text("HeadsUp Session")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                    if !stale {
+                        HStack {
+                            Image(systemName: "figure.stand")
+                                .foregroundColor(.secondary)
+                            Text("\(Int(context.state.angle))° tilt")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("HeadsUp Session")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
                 }
             } compactLeading: {
-                // Compact leading (left side)
-                Circle()
-                    .fill(stateColor(for: context.state.currentState))
-                    .frame(width: 12, height: 12)
+                if !stale {
+                    // Compact leading (left side)
+                    Circle()
+                        .fill(stateColor(for: context.state.currentState))
+                        .frame(width: 12, height: 12)
+                }
             } compactTrailing: {
-                // Compact trailing (right side)
-                Text(formatTime(context.state.elapsedSeconds))
-                    .font(.caption2.monospacedDigit())
-                    .foregroundColor(.secondary)
+                if stale {
+                     Text("End")
+                        .font(.caption2.bold())
+                        .foregroundColor(.secondary)
+                } else {
+                    // Compact trailing (right side)
+                    Text(formatTime(context.state.elapsedSeconds))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundColor(.secondary)
+                }
             } minimal: {
-                // Minimal view (when another app has island)
-                Circle()
-                    .fill(stateColor(for: context.state.currentState))
-                    .frame(width: 12, height: 12)
+                if !stale {
+                    // Minimal view (when another app has island)
+                    Circle()
+                        .fill(stateColor(for: context.state.currentState))
+                        .frame(width: 12, height: 12)
+                }
             }
         }
     }
