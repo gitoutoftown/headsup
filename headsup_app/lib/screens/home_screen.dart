@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/theme.dart';
 import '../providers/session_provider.dart';
 import '../utils/constants.dart';
-import '../widgets/character/posture_character.dart';
+import '../widgets/character/posture_character_svg.dart';
 import '../widgets/common/widgets.dart';
 import '../widgets/sheets/settings_sheet.dart';
 import '../widgets/sheets/history_sheet.dart';
@@ -35,7 +35,14 @@ class HomeScreen extends ConsumerWidget {
     
     // Determine character state from today's score
     final characterState = PostureState.fromScore(todayScore);
-    
+
+    // Derive angle from score for static display
+    // Excellent: ~10°, Good: ~20°, Okay: ~30°, Bad: ~50°, Poor: ~70°
+    final displayAngle = todayScore >= 95 ? 10.0 :
+                        todayScore >= 80 ? 20.0 :
+                        todayScore >= 55 ? 30.0 :
+                        todayScore >= 25 ? 50.0 : 70.0;
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -66,8 +73,9 @@ class HomeScreen extends ConsumerWidget {
               Expanded(
                 flex: 6,
                 child: Center(
-                  child: PostureCharacter(
+                  child: PostureCharacterSvg(
                     state: characterState,
+                    currentAngle: displayAngle,
                     size: MediaQuery.of(context).size.width * 0.5,
                   ),
                 ),

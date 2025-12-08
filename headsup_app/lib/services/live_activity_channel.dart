@@ -27,6 +27,7 @@ class LiveActivityChannel {
     required int totalPoints,
     required int pointsPerMinute,
     required double angle,
+    bool isPaused = false,
   }) async {
     if (!await isSupported()) return false;
     
@@ -44,6 +45,7 @@ class LiveActivityChannel {
         'totalPoints': totalPoints,
         'pointsPerMinute': pointsPerMinute,
         'angle': angle,
+        'isPaused': isPaused,
       });
       
       _isActive = result ?? false;
@@ -64,6 +66,7 @@ class LiveActivityChannel {
     required int totalPoints,
     required int pointsPerMinute,
     required double angle,
+    bool isPaused = false,
   }) async {
     if (!_isActive) return false;
     
@@ -81,6 +84,7 @@ class LiveActivityChannel {
         'totalPoints': totalPoints,
         'pointsPerMinute': pointsPerMinute,
         'angle': angle,
+        'isPaused': isPaused,
       });
       
       _lastUpdate = now;

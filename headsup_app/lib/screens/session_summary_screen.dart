@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../config/theme.dart';
 import '../models/session.dart';
 import '../utils/constants.dart';
-import '../widgets/character/posture_character.dart';
+import '../widgets/character/posture_character_svg.dart';
 import '../widgets/common/widgets.dart';
 
 class SessionSummaryScreen extends StatelessWidget {
@@ -20,7 +20,15 @@ class SessionSummaryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final characterState = PostureState.fromScore(session.postureScore);
-    
+
+    // Derive angle from session's average angle or score
+    final displayAngle = session.averageAngle > 0
+        ? session.averageAngle
+        : (session.postureScore >= 95 ? 10.0 :
+           session.postureScore >= 80 ? 20.0 :
+           session.postureScore >= 55 ? 30.0 :
+           session.postureScore >= 25 ? 50.0 : 70.0);
+
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -36,13 +44,14 @@ class SessionSummaryScreen extends StatelessWidget {
               ),
               
               const SizedBox(height: AppSpacing.xl),
-              
+
               // Character
-              PostureCharacter(
+              PostureCharacterSvg(
                 state: characterState,
+                currentAngle: displayAngle,
                 size: MediaQuery.of(context).size.width * 0.35,
               ),
-              
+
               const SizedBox(height: AppSpacing.lg),
               
               // Score

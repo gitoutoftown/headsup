@@ -5,6 +5,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:phone_state/phone_state.dart';
+import 'package:proximity_sensor/proximity_sensor.dart';
 
 import '../models/session.dart';
 import '../models/daily_summary.dart';
@@ -108,6 +110,18 @@ class SessionNotifier extends StateNotifier<SessionState> {
   Timer? _timer;
   Timer? _sensorTimer;
   StreamSubscription? _angleSubscription;
+  StreamSubscription<PhoneState>? _phoneStateSubscription;
+  StreamSubscription<int>? _proximitySubscription;
+  
+  // Auto-pause flags
+  bool _pausedByCall = false;
+  bool _pausedByPocket = false;
+  bool _pausedByStationary = false;
+  
+  // Stationary detection
+  DateTime _lastMovementTime = DateTime.now();
+  double _lastAngle = 0;
+
   final _postureService = PostureService.instance;
   final _motionChannel = MotionChannel.instance;
   
@@ -133,10 +147,21 @@ class SessionNotifier extends StateNotifier<SessionState> {
       angleHistory: [],
     );
     
+    _lastMovementTime = DateTime.now();
+    
     // Start timer
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!state.isPaused) {
         _tick();
+      }
+      
+      // Check stationary timeout (30 seconds) - Increased to prevent accidental pauses
+      if (state.isTracking && !state.isPaused && !_pausedByStationary) {
+        if (DateTime.now().difference(_lastMovementTime).inSeconds > 30) {
+          _pausedByStationary = true;
+          print("⚠️ Auto-Pause: Stationary timeout reached (30s)");
+          pauseSession();
+        }
       }
     });
     
@@ -148,6 +173,44 @@ class SessionNotifier extends StateNotifier<SessionState> {
     // Listen to angle updates
     _angleSubscription = _postureService.angleStream.listen(_onAngleUpdate);
     
+    // Listen to phone state (Auto-pause on call)
+    _phoneStateSubscription = PhoneState.stream.listen((event) {
+      if (event.status == PhoneStateStatus.CALL_INCOMING || 
+          event.status == PhoneStateStatus.CALL_STARTED) {
+        if (!state.isPaused) {
+          print("⚠️ Auto-Pause: Phone call detected (${event.status})");
+          pauseSession();
+          _pausedByCall = true;
+        }
+      } else if (event.status == PhoneStateStatus.CALL_ENDED || 
+                 event.status == PhoneStateStatus.NOTHING) {
+        if (_pausedByCall) {
+          print("✅ Auto-Resume: Call ended");
+          _pausedByCall = false;
+          _checkAutoResume();
+        }
+      }
+    });
+
+    // Listen to proximity sensor (Pocket Mode)
+    _proximitySubscription = ProximitySensor.events.listen((int event) {
+      // event > 0 usually means "Near" (object detected)
+      final isNear = event > 0;
+      if (isNear) {
+        if (!state.isPaused) {
+          print("⚠️ Auto-Pause: Proximity detected (Pocket Mode)");
+          pauseSession();
+          _pausedByPocket = true;
+        }
+      } else {
+        if (_pausedByPocket) {
+          print("✅ Auto-Resume: Proximity cleared");
+          _pausedByPocket = false;
+          _checkAutoResume();
+        }
+      }
+    });
+
     // Start Live Activity for Dynamic Island
     await LiveActivityChannel.start(
       sessionId: session.id,
@@ -163,12 +226,30 @@ class SessionNotifier extends StateNotifier<SessionState> {
     if (!state.isTracking || state.isPaused) return;
     _hapticTimer?.cancel();
     state = state.copyWith(isPaused: true);
+    // Force immediate Live Activity update to show paused state
+    LiveActivityChannel.update(
+      elapsedSeconds: state.elapsedSeconds,
+      currentState: state.postureState.name,
+      totalPoints: state.totalPoints,
+      pointsPerMinute: state.postureState.pointsPerMinute,
+      angle: state.currentAngle,
+      isPaused: true,
+    );
   }
   
   /// Resume the current session
   void resumeSession() {
     if (!state.isTracking || !state.isPaused) return;
     state = state.copyWith(isPaused: false);
+    // Force immediate Live Activity update to remove paused state
+    LiveActivityChannel.update(
+      elapsedSeconds: state.elapsedSeconds,
+      currentState: state.postureState.name,
+      totalPoints: state.totalPoints,
+      pointsPerMinute: state.postureState.pointsPerMinute,
+      angle: state.currentAngle,
+      isPaused: false,
+    );
     
     // Re-evaluate haptic feedback upon resume
     // We simulate a transition from 'excellent' to ensure logic triggers if currently in bad/poor
@@ -182,6 +263,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _timer?.cancel();
     _sensorTimer?.cancel();
     _angleSubscription?.cancel();
+    _phoneStateSubscription?.cancel();
+    _proximitySubscription?.cancel();
     _hapticTimer?.cancel();
     await _postureService.stopListening();
     
@@ -253,17 +336,31 @@ class SessionNotifier extends StateNotifier<SessionState> {
     );
     
     // Update Live Activity
+    // Optimization: Only update if second changed (it always does here) or state changed
+    // We assume _tick runs once per second.
+    // Ensure we pass the paused state
     LiveActivityChannel.update(
       elapsedSeconds: newElapsed,
       currentState: currentState.name,
       totalPoints: newPoints,
       pointsPerMinute: currentState.pointsPerMinute,
       angle: state.currentAngle,
+      isPaused: state.isPaused,
     );
   }
   
   /// Handle angle update from sensor
   void _onAngleUpdate(double angle) {
+    // Check for significant movement (> 2 degrees)
+    if ((angle - _lastAngle).abs() > 2.0) {
+      _lastMovementTime = DateTime.now();
+      if (_pausedByStationary) {
+        _pausedByStationary = false;
+        _checkAutoResume();
+      }
+    }
+    _lastAngle = angle;
+
     final newHistory = [...state.angleHistory, angle];
     // Keep last 100 readings for history
     if (newHistory.length > 100) {
@@ -367,6 +464,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
     // Use MotionChannel for background-capable vibration
     await _motionChannel.vibrate();
   }
+
+  /// Check if we should auto-resume based on flags
+  void _checkAutoResume() {
+    if (!_pausedByCall && !_pausedByPocket && !_pausedByStationary) {
+      // If manually paused by user, this might override it. 
+      // For MVP, we assume "Active Session" means "Run unless blocked".
+      resumeSession();
+    }
+  }
   
   /// Calculate average angle from history
   double _calculateAverageAngle() {
@@ -379,6 +485,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _timer?.cancel();
     _sensorTimer?.cancel();
     _angleSubscription?.cancel();
+    _phoneStateSubscription?.cancel();
+    _proximitySubscription?.cancel();
     _hapticTimer?.cancel();
     super.dispose();
   }

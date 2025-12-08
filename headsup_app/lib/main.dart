@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'config/supabase_config.dart';
-import 'config/theme.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
 

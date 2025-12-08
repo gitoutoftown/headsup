@@ -26,13 +26,21 @@ struct HeadsUpLiveActivity: Widget {
         ActivityConfiguration(for: HeadsUpActivityAttributes.self) { context in
             // Lock screen / banner UI
             let stale = isActivityStale(context)
+            let paused = context.state.isPaused
             
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Image(systemName: iconName(for: context.state.currentState))
-                        .foregroundColor(stateColor(for: context.state.currentState))
-                    Text(stale ? "Session Ended" : stateName(for: context.state.currentState))
-                        .font(.headline)
+                    if paused && !stale {
+                        Image(systemName: "pause.circle.fill")
+                            .foregroundColor(.yellow)
+                        Text("Session Paused")
+                            .font(.headline)
+                    } else {
+                        Image(systemName: iconName(for: context.state.currentState))
+                            .foregroundColor(stateColor(for: context.state.currentState))
+                        Text(stale ? "Session Ended" : stateName(for: context.state.currentState))
+                            .font(.headline)
+                    }
                     Spacer()
                     if !stale {
                         Text(formatTime(context.state.elapsedSeconds))
@@ -40,7 +48,7 @@ struct HeadsUpLiveActivity: Widget {
                     }
                 }
                 
-                if !stale {
+                if !stale && !paused {
                     HStack {
                         Text("Points: +\(context.state.totalPoints)")
                             .font(.caption)
@@ -49,20 +57,31 @@ struct HeadsUpLiveActivity: Widget {
                             .font(.caption)
                     }
                     .foregroundColor(.secondary)
+                } else if paused && !stale {
+                    Text("Tracking paused (Call/Pocket)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
             .padding()
             .opacity(stale ? 0.5 : 1.0)
         } dynamicIsland: { context in
             let stale = isActivityStale(context)
+            let paused = context.state.isPaused
             
             return DynamicIsland {
                 // Expanded view (long press)
                 DynamicIslandExpandedRegion(.leading) {
                     if !stale {
-                        Image(systemName: iconName(for: context.state.currentState))
-                            .font(.title2)
-                            .foregroundColor(stateColor(for: context.state.currentState))
+                        if paused {
+                            Image(systemName: "pause.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(.yellow)
+                        } else {
+                            Image(systemName: iconName(for: context.state.currentState))
+                                .font(.title2)
+                                .foregroundColor(stateColor(for: context.state.currentState))
+                        }
                     }
                 }
                 
@@ -85,6 +104,13 @@ struct HeadsUpLiveActivity: Widget {
                             Text("Session Ended")
                                 .font(.headline)
                                 .foregroundColor(.secondary)
+                        } else if paused {
+                            Text("Paused")
+                                .font(.headline)
+                                .foregroundColor(.yellow)
+                            Text("Auto-paused")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         } else {
                             Text(stateName(for: context.state.currentState))
                                 .font(.headline)
@@ -98,11 +124,13 @@ struct HeadsUpLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     if !stale {
                         HStack {
-                            Image(systemName: "figure.stand")
+                            Image(systemName: paused ? "pause.fill" : "figure.stand")
                                 .foregroundColor(.secondary)
-                            Text("\(Int(context.state.angle))° tilt")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            if !paused {
+                                Text("\(Int(context.state.angle))° tilt")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                             Spacer()
                             Text("HeadsUp Session")
                                 .font(.caption2)
@@ -114,9 +142,15 @@ struct HeadsUpLiveActivity: Widget {
             } compactLeading: {
                 if !stale {
                     // Compact leading (left side)
-                    Circle()
-                        .fill(stateColor(for: context.state.currentState))
-                        .frame(width: 12, height: 12)
+                    if paused {
+                        Image(systemName: "pause.fill")
+                            .foregroundColor(.yellow)
+                            .font(.caption2)
+                    } else {
+                        Circle()
+                            .fill(stateColor(for: context.state.currentState))
+                            .frame(width: 12, height: 12)
+                    }
                 }
             } compactTrailing: {
                 if stale {
@@ -132,9 +166,15 @@ struct HeadsUpLiveActivity: Widget {
             } minimal: {
                 if !stale {
                     // Minimal view (when another app has island)
-                    Circle()
-                        .fill(stateColor(for: context.state.currentState))
-                        .frame(width: 12, height: 12)
+                    if paused {
+                        Image(systemName: "pause.fill")
+                            .foregroundColor(.yellow)
+                            .font(.caption2)
+                    } else {
+                        Circle()
+                            .fill(stateColor(for: context.state.currentState))
+                            .frame(width: 12, height: 12)
+                    }
                 }
             }
         }

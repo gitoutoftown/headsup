@@ -12,6 +12,7 @@ struct HeadsUpActivityAttributes: ActivityAttributes {
         var totalPoints: Int
         var pointsPerMinute: Int
         var angle: Double
+        var isPaused: Bool
     }
     
     var startTime: Date

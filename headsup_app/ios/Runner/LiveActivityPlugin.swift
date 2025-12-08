@@ -55,6 +55,9 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
             return
         }
         
+        // Optional isPaused argument, defaults to false
+        let isPaused = (args["isPaused"] as? Bool) ?? false
+        
         let attributes = HeadsUpActivityAttributes(startTime: Date())
         let contentState = HeadsUpActivityAttributes.ContentState(
             sessionId: sessionId,
@@ -62,7 +65,8 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
             currentState: currentState,
             totalPoints: totalPoints,
             pointsPerMinute: pointsPerMinute,
-            angle: angle
+            angle: angle,
+            isPaused: isPaused
         )
         
         do {
@@ -125,13 +129,16 @@ class LiveActivityPlugin: NSObject, FlutterPlugin {
             return
         }
         
+        let isPaused = (args["isPaused"] as? Bool) ?? false
+        
         let contentState = HeadsUpActivityAttributes.ContentState(
             sessionId: activity.contentState.sessionId,
             elapsedSeconds: elapsedSeconds,
             currentState: currentState,
             totalPoints: totalPoints,
             pointsPerMinute: pointsPerMinute,
-            angle: angle
+            angle: angle,
+            isPaused: isPaused
         )
         
         Task {

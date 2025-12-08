@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../config/theme.dart';
-import '../../widgets/character/posture_character.dart';
+import '../../widgets/character/posture_character_svg.dart';
 import '../../widgets/common/widgets.dart';
 import '../../utils/constants.dart';
 import 'permissions_screen.dart';
@@ -21,13 +21,14 @@ class WelcomeScreen extends StatelessWidget {
           child: Column(
             children: [
               const Spacer(),
-              
+
               // Character illustration
-              const PostureCharacter(
+              const PostureCharacterSvg(
                 state: PostureState.good,
+                currentAngle: 20.0, // Good posture angle
                 size: 150,
               ),
-              
+
               const SizedBox(height: AppSpacing.xl),
               
               // Welcome text

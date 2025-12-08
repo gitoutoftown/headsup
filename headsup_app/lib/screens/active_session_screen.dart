@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/theme.dart';
 import '../providers/session_provider.dart';
 import '../utils/constants.dart';
-import '../widgets/character/posture_character.dart';
+import '../widgets/character/posture_character_svg.dart';
 import '../widgets/common/widgets.dart';
 import 'session_summary_screen.dart';
 
@@ -33,8 +33,9 @@ class ActiveSessionScreen extends ConsumerWidget {
               Expanded(
                 flex: 4,
                 child: Center(
-                  child: PostureCharacter(
+                  child: PostureCharacterSvg(
                     state: currentState,
+                    currentAngle: sessionState.currentAngle,
                     size: MediaQuery.of(context).size.width * 0.4,
                   ),
                 ),
